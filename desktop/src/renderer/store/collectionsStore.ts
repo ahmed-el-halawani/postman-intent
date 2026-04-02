@@ -36,7 +36,8 @@ interface CollectionsState {
   moveRequestToCollection: (fromCollectionId: string, toCollectionId: string, requestId: string) => void;
 
   // Saved responses
-  saveResponse: (collectionId: string, requestId: string, name: string, response: JsonRpcResponse, responseTime: number | null, activityResult?: Record<string, unknown> | null) => void;
+  saveResponse: (collectionId: string, requestId: string, name: string, request: IntentRequest, response: JsonRpcResponse, responseTime: number | null, activityResult?: Record<string, unknown> | null) => void;
+  renameResponse: (collectionId: string, requestId: string, responseId: string, name: string) => void;
   deleteResponse: (collectionId: string, requestId: string, responseId: string) => void;
 
   // UI
@@ -82,6 +83,7 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
         ...r,
         savedResponses: (r.savedResponses || []).map((sr) => ({
           ...sr,
+          request: sr.request ?? r.request,
           activityResult: sr.activityResult ?? null,
         })),
       })),
@@ -323,10 +325,11 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
     debouncedSave(get());
   },
 
-  saveResponse: (collectionId, requestId, name, response, responseTime, activityResult) => {
+  saveResponse: (collectionId, requestId, name, request, response, responseTime, activityResult) => {
     const saved: SavedResponse = {
       id: uuidv4(),
       name,
+      request: { ...request },
       response,
       activityResult: activityResult ?? null,
       responseTime,
@@ -341,6 +344,31 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
               requests: c.requests.map((r) =>
                 r.id === requestId
                   ? { ...r, savedResponses: [...r.savedResponses, saved], updatedAt: Date.now() }
+                  : r
+              ),
+            }
+          : c
+      ),
+    }));
+    debouncedSave(get());
+  },
+
+  renameResponse: (collectionId, requestId, responseId, name) => {
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId
+          ? {
+              ...c,
+              updatedAt: Date.now(),
+              requests: c.requests.map((r) =>
+                r.id === requestId
+                  ? {
+                      ...r,
+                      savedResponses: r.savedResponses.map((sr) =>
+                        sr.id === responseId ? { ...sr, name } : sr
+                      ),
+                      updatedAt: Date.now(),
+                    }
                   : r
               ),
             }

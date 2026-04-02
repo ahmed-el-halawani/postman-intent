@@ -18,6 +18,7 @@ export default function ResponsePanel() {
   const waitingForResult = activeTab?.waitingForResult ?? false;
   const waitingStartTime = activeTab?.waitingStartTime ?? null;
   const savedRef = activeTab?.savedRequestRef ?? null;
+  const currentRequest = activeTab?.request ?? null;
 
   const { notifications, latestResult, clearNotifications } = useNotificationStore();
   const collections = useCollectionsStore((s) => s.collections);
@@ -225,8 +226,8 @@ export default function ResponsePanel() {
             value={saveResponseName}
             onChange={(e) => setSaveResponseName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && saveResponseName.trim()) {
-                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), response, responseTime, latestResult);
+              if (e.key === 'Enter' && saveResponseName.trim() && currentRequest) {
+                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, latestResult);
                 setShowSaveResponseInput(false);
               }
               if (e.key === 'Escape') setShowSaveResponseInput(false);
@@ -234,8 +235,8 @@ export default function ResponsePanel() {
           />
           <button
             onClick={() => {
-              if (saveResponseName.trim()) {
-                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), response, responseTime, latestResult);
+              if (saveResponseName.trim() && currentRequest) {
+                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, latestResult);
               }
               setShowSaveResponseInput(false);
             }}

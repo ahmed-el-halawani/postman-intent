@@ -136,6 +136,7 @@ export interface RequestTab {
   name: string;
   request: IntentRequest;
   savedRequestRef: { collectionId: string; requestId: string } | null;
+  savedResponseId: string | null;
   isDirty: boolean;
   response: JsonRpcResponse | null;
   responseTime: number | null;
@@ -150,6 +151,7 @@ export interface RequestTab {
 export interface SavedResponse {
   id: string;
   name: string;
+  request: IntentRequest;
   response: JsonRpcResponse;
   activityResult: Record<string, unknown> | null;
   responseTime: number | null;

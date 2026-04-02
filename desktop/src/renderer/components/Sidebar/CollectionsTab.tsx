@@ -12,9 +12,10 @@ const TYPE_COLORS: Record<IntentType, string> = {
 };
 
 interface MenuState {
-  type: 'collection' | 'request';
+  type: 'collection' | 'request' | 'savedResponse';
   collectionId: string;
   requestId?: string;
+  responseId?: string;
   position: { x: number; y: number };
 }
 
@@ -41,9 +42,10 @@ export default function CollectionsTab() {
     moveRequestToCollection,
     renameRequest,
     deleteResponse,
+    renameResponse,
   } = useCollectionsStore();
 
-  const { openSavedRequest, createTab } = useTabStore();
+  const { openSavedRequest, createTab, openSavedResponseTab } = useTabStore();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -55,6 +57,10 @@ export default function CollectionsTab() {
   const [menuState, setMenuState] = useState<MenuState | null>(null);
   const [moveDialog, setMoveDialog] = useState<MoveDialogState | null>(null);
   const [expandedRequestIds, setExpandedRequestIds] = useState<Set<string>>(new Set());
+  const [renamingResponseId, setRenamingResponseId] = useState<string | null>(null);
+  const [renamingResponseCollectionId, setRenamingResponseCollectionId] = useState<string | null>(null);
+  const [renamingResponseRequestId, setRenamingResponseRequestId] = useState<string | null>(null);
+  const [renameResponseValue, setRenameResponseValue] = useState('');
 
   const handleCreate = () => {
     if (!newName.trim()) return;
@@ -102,6 +108,60 @@ export default function CollectionsTab() {
       requestId,
       position: { x: e.clientX, y: e.clientY },
     });
+  };
+
+  const handleRenameResponse = (collectionId: string, requestId: string, responseId: string) => {
+    if (!renameResponseValue.trim()) return;
+    renameResponse(collectionId, requestId, responseId, renameResponseValue.trim());
+    setRenamingResponseId(null);
+    setRenamingResponseCollectionId(null);
+    setRenamingResponseRequestId(null);
+  };
+
+  const handleSavedResponseContextMenu = (
+    e: React.MouseEvent,
+    collectionId: string,
+    requestId: string,
+    responseId: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuState({
+      type: 'savedResponse',
+      collectionId,
+      requestId,
+      responseId,
+      position: { x: e.clientX, y: e.clientY },
+    });
+  };
+
+  const getSavedResponseMenuItems = (collectionId: string, requestId: string, responseId: string): ContextMenuEntry[] => {
+    const collection = collections.find((c) => c.id === collectionId);
+    const req = collection?.requests.find((r) => r.id === requestId);
+    const sr = req?.savedResponses.find((s) => s.id === responseId);
+    if (!sr) return [];
+    return [
+      {
+        label: 'Open in New Tab',
+        onClick: () => openSavedResponseTab(sr),
+      },
+      { divider: true },
+      {
+        label: 'Rename',
+        onClick: () => {
+          setRenamingResponseId(responseId);
+          setRenamingResponseCollectionId(collectionId);
+          setRenamingResponseRequestId(requestId);
+          setRenameResponseValue(sr.name);
+        },
+      },
+      { divider: true },
+      {
+        label: 'Delete',
+        danger: true,
+        onClick: () => deleteResponse(collectionId, requestId, responseId),
+      },
+    ];
   };
 
   const getCollectionMenuItems = (collectionId: string): ContextMenuEntry[] => {
@@ -488,85 +548,121 @@ export default function CollectionsTab() {
                       {/* Expanded saved responses sub-items */}
                       {expandedRequestIds.has(req.id) && req.savedResponses && req.savedResponses.length > 0 && (
                         <div style={{ background: colors.bg + '60' }}>
-                          {req.savedResponses.map((sr) => (
-                            <div
-                              key={sr.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '3px 10px 3px 44px',
-                                borderBottom: `1px solid ${colors.border}`,
-                                fontSize: '10px',
-                                color: colors.textDim,
-                                transition: 'background 0.1s',
-                              }}
-                              onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLElement).style.background = colors.bg;
-                              }}
-                              onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLElement).style.background = 'transparent';
-                              }}
-                            >
-                              {/* Status dot */}
-                              <span
+                          {req.savedResponses.map((sr) => {
+                            const isRenamingSr =
+                              renamingResponseId === sr.id &&
+                              renamingResponseCollectionId === collection.id &&
+                              renamingResponseRequestId === req.id;
+
+                            return (
+                              <div
+                                key={sr.id}
+                                onClick={() => openSavedResponseTab(sr)}
+                                onContextMenu={(e) => handleSavedResponseContextMenu(e, collection.id, req.id, sr.id)}
                                 style={{
-                                  width: '5px',
-                                  height: '5px',
-                                  borderRadius: '50%',
-                                  background: sr.response.error ? colors.error : colors.success,
-                                  flexShrink: 0,
-                                }}
-                              />
-
-                              {/* Response name */}
-                              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {sr.name}
-                              </span>
-
-                              {/* Activity result indicator */}
-                              {sr.activityResult && (
-                                <span style={{ fontSize: '8px', color: colors.warning, opacity: 0.8 }} title="Has activity result">
-                                  AR
-                                </span>
-                              )}
-
-                              {/* Time */}
-                              {sr.responseTime != null && (
-                                <span style={{ fontSize: '9px', color: colors.textMuted }}>
-                                  {sr.responseTime}ms
-                                </span>
-                              )}
-
-                              {/* Delete button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteResponse(collection.id, req.id, sr.id);
-                                }}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: colors.textMuted,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '7px 10px 7px 44px',
+                                  borderBottom: `1px solid ${colors.border}`,
+                                  fontSize: '11px',
+                                  color: colors.textDim,
                                   cursor: 'pointer',
-                                  fontSize: '10px',
-                                  padding: '0 2px',
-                                  opacity: 0.3,
-                                  lineHeight: 1,
+                                  transition: 'background 0.1s',
                                 }}
                                 onMouseEnter={(e) => {
-                                  (e.target as HTMLElement).style.opacity = '1';
-                                  (e.target as HTMLElement).style.color = colors.error;
+                                  (e.currentTarget as HTMLElement).style.background = colors.bg;
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.target as HTMLElement).style.opacity = '0.3';
-                                  (e.target as HTMLElement).style.color = colors.textMuted;
+                                  (e.currentTarget as HTMLElement).style.background = 'transparent';
                                 }}
                               >
-                                x
-                              </button>
-                            </div>
-                          ))}
+                                {/* Status dot */}
+                                <span
+                                  style={{
+                                    width: '7px',
+                                    height: '7px',
+                                    borderRadius: '50%',
+                                    background: sr.response.error ? colors.error : colors.success,
+                                    flexShrink: 0,
+                                  }}
+                                />
+
+                                {/* Response name — editable on double-click */}
+                                {isRenamingSr ? (
+                                  <input
+                                    autoFocus
+                                    style={{
+                                      flex: 1,
+                                      padding: '2px 4px',
+                                      background: colors.bg,
+                                      color: colors.text,
+                                      border: `1px solid ${colors.accent}`,
+                                      borderRadius: '2px',
+                                      fontSize: '11px',
+                                      outline: 'none',
+                                    }}
+                                    value={renameResponseValue}
+                                    onChange={(e) => setRenameResponseValue(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleRenameResponse(collection.id, req.id, sr.id);
+                                      if (e.key === 'Escape') {
+                                        setRenamingResponseId(null);
+                                        setRenamingResponseCollectionId(null);
+                                        setRenamingResponseRequestId(null);
+                                      }
+                                    }}
+                                    onBlur={() => handleRenameResponse(collection.id, req.id, sr.id)}
+                                  />
+                                ) : (
+                                  <span
+                                    style={{
+                                      flex: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      color: colors.text,
+                                    }}
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation();
+                                      setRenamingResponseId(sr.id);
+                                      setRenamingResponseCollectionId(collection.id);
+                                      setRenamingResponseRequestId(req.id);
+                                      setRenameResponseValue(sr.name);
+                                    }}
+                                  >
+                                    {sr.name}
+                                  </span>
+                                )}
+
+                                {/* Activity result indicator */}
+                                {sr.activityResult && (
+                                  <span
+                                    style={{
+                                      fontSize: '9px',
+                                      color: colors.warning,
+                                      fontWeight: 600,
+                                      opacity: 0.8,
+                                      padding: '0 4px',
+                                      background: colors.warning + '15',
+                                      borderRadius: '3px',
+                                    }}
+                                    title="Includes activity result"
+                                  >
+                                    AR
+                                  </span>
+                                )}
+
+                                {/* Time */}
+                                {sr.responseTime != null && (
+                                  <span style={{ fontSize: '10px', color: colors.textMuted }}>
+                                    {sr.responseTime}ms
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                       </React.Fragment>
@@ -585,6 +681,8 @@ export default function CollectionsTab() {
           items={
             menuState.type === 'collection'
               ? getCollectionMenuItems(menuState.collectionId)
+              : menuState.type === 'savedResponse'
+              ? getSavedResponseMenuItems(menuState.collectionId, menuState.requestId!, menuState.responseId!)
               : getRequestMenuItems(menuState.collectionId, menuState.requestId!)
           }
           position={menuState.position}

@@ -6,6 +6,7 @@ import type {
   JsonRpcResponse,
   RequestTab,
   HistoryEntry,
+  SavedResponse,
 } from '../../shared/types';
 import { useNotificationStore } from './notificationStore';
 import { useCollectionsStore } from './collectionsStore';
@@ -46,6 +47,7 @@ interface TabState {
   // Load from collection/history
   loadRequest: (request: IntentRequest) => void;
   openSavedRequest: (collectionId: string, requestId: string, name: string, request: IntentRequest) => void;
+  openSavedResponseTab: (savedResponse: SavedResponse) => void;
 }
 
 const defaultRequest: IntentRequest = {
@@ -66,6 +68,7 @@ function createNewTab(name?: string, request?: IntentRequest, savedRef?: { colle
     name: name || 'Untitled',
     request: request ? { ...request } : { ...defaultRequest },
     savedRequestRef: savedRef || null,
+    savedResponseId: null,
     isDirty: false,
     response: null,
     responseTime: null,
@@ -160,6 +163,7 @@ export const useTabStore = create<TabState>((set, get) => ({
               waitingStartTime: null,
               name: 'Untitled',
               savedRequestRef: null,
+              savedResponseId: null,
             }
           : t
       ),
@@ -363,5 +367,42 @@ export const useTabStore = create<TabState>((set, get) => ({
       return;
     }
     get().createTab(name, request, { collectionId, requestId });
+  },
+
+  openSavedResponseTab: (savedResponse) => {
+    // Check if this saved response is already open in a tab
+    const existing = get().tabs.find((t) => t.savedResponseId === savedResponse.id);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+
+    // Create a new tab pre-populated with the saved request snapshot + response
+    const tab: RequestTab = {
+      id: uuidv4(),
+      name: `${savedResponse.name}`,
+      request: { ...savedResponse.request },
+      savedRequestRef: null,
+      savedResponseId: savedResponse.id,
+      isDirty: false,
+      response: savedResponse.response,
+      responseTime: savedResponse.responseTime,
+      isSending: false,
+      waitingForResult: false,
+      waitingRequestId: null,
+      waitingStartTime: null,
+    };
+    set((state) => {
+      const activeIndex = state.tabs.findIndex((t) => t.id === state.activeTabId);
+      const tabs = [...state.tabs];
+      tabs.splice(activeIndex + 1, 0, tab);
+      return { tabs, activeTabId: tab.id };
+    });
+
+    // If there's an activityResult, push it to notification store so ResponsePanel shows it
+    if (savedResponse.activityResult) {
+      useNotificationStore.getState().clearLatestResult();
+      useNotificationStore.setState({ latestResult: savedResponse.activityResult });
+    }
   },
 }));
