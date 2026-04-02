@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { JsonRpcNotification } from '../../shared/types';
-import { useRequestStore } from './requestStore';
 
 interface NotificationState {
   notifications: JsonRpcNotification[];
@@ -15,7 +14,6 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   latestResult: null,
 
   addNotification: (notification) => {
-    // First: update our own state
     set((state) => {
       const updated = [notification, ...state.notifications].slice(0, 200);
 
@@ -29,16 +27,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
       return { notifications: updated };
     });
-
-    // Then: clear waiting state in request store (outside of set callback)
-    if (notification.method === 'intent.result') {
-      setTimeout(() => {
-        const requestStore = useRequestStore.getState();
-        if (requestStore.waitingForResult) {
-          requestStore.cancelWaiting();
-        }
-      }, 0);
-    }
+    // NOTE: waiting state cancellation is handled in App.tsx onNotification handler
   },
 
   clearLatestResult: () => set({ latestResult: null }),

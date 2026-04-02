@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useRequestStore } from '../../store/requestStore';
+import { useTabStore } from '../../store/tabStore';
 import { colors, label } from '../../styles';
 import type { IntentType, IntentRequest, HistoryEntry } from '../../../shared/types';
 import QuickActions from '../QuickActions/QuickActions';
+import CollectionsTab from './CollectionsTab';
 
 const TYPE_COLORS: Record<IntentType, string> = {
   activity: colors.intentActivity,
@@ -14,7 +15,7 @@ type Tab = 'quick' | 'history' | 'collections';
 
 export default function Sidebar() {
   const [tab, setTab] = useState<Tab>('quick');
-  const { history, clearHistory, loadRequest } = useRequestStore();
+  const { history, clearHistory, loadRequest } = useTabStore();
 
   return (
     <div
@@ -182,12 +183,4 @@ function HistoryTab({
   );
 }
 
-function CollectionsTab() {
-  return (
-    <div style={{ padding: '16px', textAlign: 'center' }}>
-      <span style={{ fontSize: '12px', color: colors.textMuted }}>
-        Collections coming soon. Save and organize your requests.
-      </span>
-    </div>
-  );
-}
+// CollectionsTab imported from ./CollectionsTab.tsx

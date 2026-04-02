@@ -1,5 +1,5 @@
 import React from 'react';
-import { useRequestStore } from '../../store/requestStore';
+import { useTabStore } from '../../store/tabStore';
 import { colors, monoInput, select, ghostButton, label } from '../../styles';
 import type { ExtraType } from '../../../shared/types';
 
@@ -8,7 +8,11 @@ const EXTRA_TYPES: ExtraType[] = [
 ];
 
 export default function ExtrasEditor() {
-  const { request, addExtra, updateExtra, removeExtra } = useRequestStore();
+  const tab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const addExtra = useTabStore((s) => s.addExtra);
+  const updateExtra = useTabStore((s) => s.updateExtra);
+  const removeExtra = useTabStore((s) => s.removeExtra);
+  const request = tab?.request || { extras: [] };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

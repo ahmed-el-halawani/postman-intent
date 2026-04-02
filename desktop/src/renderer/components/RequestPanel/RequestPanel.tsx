@@ -1,9 +1,11 @@
 import React from 'react';
-import { useRequestStore } from '../../store/requestStore';
+import { useTabStore } from '../../store/tabStore';
 import { useDeviceStore } from '../../store/deviceStore';
-import { colors, accentButton, badge } from '../../styles';
+import { colors, accentButton, ghostButton, badge } from '../../styles';
 import type { IntentType } from '../../../shared/types';
 import IntentBuilder from './IntentBuilder';
+import BroadcastBuilder from './BroadcastBuilder';
+import ServiceBuilder from './ServiceBuilder';
 
 const TYPE_COLORS: Record<IntentType, string> = {
   activity: colors.intentActivity,
@@ -12,9 +14,18 @@ const TYPE_COLORS: Record<IntentType, string> = {
 };
 
 export default function RequestPanel() {
-  const { request, updateRequest, sendRequest, isSending, resetRequest } = useRequestStore();
+  const tab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const updateRequest = useTabStore((s) => s.updateRequest);
+  const sendRequest = useTabStore((s) => s.sendRequest);
+  const resetRequest = useTabStore((s) => s.resetRequest);
+  const saveTab = useTabStore((s) => s.saveTab);
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
+
+  if (!tab) return null;
+
+  const { request, isSending } = tab;
+  const showIntentSend = request.intentType === 'activity';
 
   return (
     <div
@@ -59,37 +70,53 @@ export default function RequestPanel() {
 
         <div style={{ flex: 1 }} />
 
+        {/* Save button */}
         <button
           style={{
-            ...accentButton,
+            ...ghostButton,
             fontSize: '11px',
             padding: '4px 10px',
-            background: 'transparent',
-            color: colors.textDim,
-            border: `1px solid ${colors.border}`,
           }}
-          onClick={resetRequest}
+          onClick={() => saveTab()}
+          title="Save (Ctrl+S)"
         >
-          Clear
+          Save
         </button>
 
-        <button
-          style={{
-            ...accentButton,
-            opacity: isSending || !isConnected ? 0.5 : 1,
-            padding: '5px 20px',
-            fontSize: '12px',
-          }}
-          onClick={sendRequest}
-          disabled={isSending || !isConnected}
-        >
-          {isSending ? 'Sending...' : 'Send'}
-        </button>
+        {showIntentSend && (
+          <>
+            <button
+              style={{
+                ...ghostButton,
+                fontSize: '11px',
+                padding: '4px 10px',
+              }}
+              onClick={resetRequest}
+            >
+              Clear
+            </button>
+
+            <button
+              style={{
+                ...accentButton,
+                opacity: isSending || !isConnected ? 0.5 : 1,
+                padding: '5px 20px',
+                fontSize: '12px',
+              }}
+              onClick={sendRequest}
+              disabled={isSending || !isConnected}
+            >
+              {isSending ? 'Sending...' : 'Send'}
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Intent builder form */}
+      {/* Builder form based on type */}
       <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-        <IntentBuilder />
+        {request.intentType === 'activity' && <IntentBuilder />}
+        {request.intentType === 'broadcast' && <BroadcastBuilder />}
+        {request.intentType === 'service' && <ServiceBuilder />}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDeviceStore } from '../../store/deviceStore';
-import { useRequestStore } from '../../store/requestStore';
+import { useTabStore } from '../../store/tabStore';
 import { colors, input, label, badge } from '../../styles';
 import type { IntentType } from '../../../shared/types';
 
@@ -28,7 +28,7 @@ export default function QuickActions() {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'common' | 'device'>('all');
   const [loading, setLoading] = useState(false);
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
-  const { updateRequest } = useRequestStore();
+  const { updateRequest } = useTabStore();
   const isConnected = connectionStatus === 'connected';
 
   const fetchQuickActions = async () => {
@@ -85,7 +85,7 @@ export default function QuickActions() {
 
     // Also set forResult in the store
     if (action.forResult) {
-      useRequestStore.getState().updateRequest({ forResult: true } as any);
+      useTabStore.getState().updateRequest({ forResult: true } as any);
     }
   };
 

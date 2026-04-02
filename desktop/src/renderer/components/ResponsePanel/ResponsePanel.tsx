@@ -1,18 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { useRequestStore } from '../../store/requestStore';
+import { useTabStore } from '../../store/tabStore';
 import { useNotificationStore } from '../../store/notificationStore';
-import { colors, label } from '../../styles';
+import { useCollectionsStore } from '../../store/collectionsStore';
+import { colors, label, ghostButton } from '../../styles';
 import { useDeviceStore } from '../../store/deviceStore';
+import type { SavedResponse, JsonRpcResponse } from '../../../shared/types';
 
 type ResponseTab = 'response' | 'notifications';
 
 export default function ResponsePanel() {
-  const { response, responseTime, isSending, waitingForResult, waitingStartTime, cancelWaiting } =
-    useRequestStore();
+  const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const cancelWaiting = useTabStore((s) => s.cancelWaiting);
+
+  const response = activeTab?.response ?? null;
+  const responseTime = activeTab?.responseTime ?? null;
+  const isSending = activeTab?.isSending ?? false;
+  const waitingForResult = activeTab?.waitingForResult ?? false;
+  const waitingStartTime = activeTab?.waitingStartTime ?? null;
+  const savedRef = activeTab?.savedRequestRef ?? null;
+
   const { notifications, latestResult, clearNotifications } = useNotificationStore();
+  const collections = useCollectionsStore((s) => s.collections);
+  const saveResponse = useCollectionsStore((s) => s.saveResponse);
+  const deleteResponse = useCollectionsStore((s) => s.deleteResponse);
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
   const [tab, setTab] = useState<ResponseTab>('response');
+  const [showSaveResponseInput, setShowSaveResponseInput] = useState(false);
+  const [saveResponseName, setSaveResponseName] = useState('');
+  const [showSavedResponses, setShowSavedResponses] = useState(false);
+  const [viewingSavedResponse, setViewingSavedResponse] = useState<SavedResponse | null>(null);
+
+  // Get saved responses for current tab's saved request
+  const savedResponses: SavedResponse[] = (() => {
+    if (!savedRef) return [];
+    const col = collections.find((c) => c.id === savedRef.collectionId);
+    const req = col?.requests.find((r) => r.id === savedRef.requestId);
+    return req?.savedResponses || [];
+  })();
 
   // Auto-switch to response tab when a new result arrives
   useEffect(() => {
@@ -129,16 +154,237 @@ export default function ResponsePanel() {
             Sending...
           </span>
         )}
+
+        {/* Save Response button — only when tab has a saved request ref and a response */}
+        {tab === 'response' && savedRef && response && !isSending && (
+          <div style={{ position: 'relative', marginRight: '4px' }}>
+            <button
+              onClick={() => {
+                setSaveResponseName(
+                  response.error
+                    ? `Error ${response.error.code}`
+                    : `Response ${new Date().toLocaleTimeString()}`
+                );
+                setShowSaveResponseInput(true);
+              }}
+              style={{
+                ...ghostButton,
+                fontSize: '10px',
+                padding: '3px 8px',
+              }}
+            >
+              Save Response
+            </button>
+          </div>
+        )}
+
+        {/* Saved responses dropdown toggle */}
+        {tab === 'response' && savedResponses.length > 0 && (
+          <div style={{ position: 'relative', marginRight: '8px' }}>
+            <button
+              onClick={() => setShowSavedResponses(!showSavedResponses)}
+              style={{
+                ...ghostButton,
+                fontSize: '10px',
+                padding: '3px 8px',
+                color: colors.success,
+                borderColor: colors.success + '40',
+              }}
+            >
+              Saved ({savedResponses.length})
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Save Response Name Input */}
+      {showSaveResponseInput && savedRef && response && (
+        <div
+          style={{
+            padding: '8px 12px',
+            background: colors.surfaceLight,
+            borderBottom: `1px solid ${colors.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ fontSize: '11px', color: colors.textDim }}>Name:</span>
+          <input
+            autoFocus
+            style={{
+              flex: 1,
+              padding: '4px 8px',
+              background: colors.bg,
+              color: colors.text,
+              border: `1px solid ${colors.border}`,
+              borderRadius: '3px',
+              fontSize: '11px',
+              outline: 'none',
+            }}
+            value={saveResponseName}
+            onChange={(e) => setSaveResponseName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && saveResponseName.trim()) {
+                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), response, responseTime, latestResult);
+                setShowSaveResponseInput(false);
+              }
+              if (e.key === 'Escape') setShowSaveResponseInput(false);
+            }}
+          />
+          <button
+            onClick={() => {
+              if (saveResponseName.trim()) {
+                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), response, responseTime, latestResult);
+              }
+              setShowSaveResponseInput(false);
+            }}
+            style={{
+              padding: '4px 10px',
+              background: colors.success,
+              color: colors.white,
+              border: 'none',
+              borderRadius: '3px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setShowSaveResponseInput(false)}
+            style={{
+              padding: '4px 8px',
+              background: 'transparent',
+              color: colors.textMuted,
+              border: `1px solid ${colors.border}`,
+              borderRadius: '3px',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Saved Responses Dropdown */}
+      {showSavedResponses && savedResponses.length > 0 && savedRef && (
+        <div
+          style={{
+            borderBottom: `1px solid ${colors.border}`,
+            maxHeight: '200px',
+            overflow: 'auto',
+            background: colors.surfaceLight,
+          }}
+        >
+          {savedResponses.map((sr) => (
+            <div
+              key={sr.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                borderBottom: `1px solid ${colors.border}`,
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setViewingSavedResponse(sr);
+                setShowSavedResponses(false);
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = colors.bg;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'transparent';
+              }}
+            >
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: sr.response.error ? colors.error : colors.success,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontSize: '11px', color: colors.text, flex: 1 }}>{sr.name}</span>
+              {sr.responseTime && (
+                <span style={{ fontSize: '10px', color: colors.textMuted }}>{sr.responseTime}ms</span>
+              )}
+              <span style={{ fontSize: '9px', color: colors.textMuted }}>
+                {new Date(sr.savedAt).toLocaleDateString()}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteResponse(savedRef.collectionId, savedRef.requestId, sr.id);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: colors.textMuted,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  padding: '0 4px',
+                  opacity: 0.4,
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.opacity = '1';
+                  (e.target as HTMLElement).style.color = colors.error;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.opacity = '0.4';
+                  (e.target as HTMLElement).style.color = colors.textMuted;
+                }}
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Viewing saved response banner */}
+      {viewingSavedResponse && (
+        <div
+          style={{
+            padding: '6px 12px',
+            background: colors.success + '15',
+            borderBottom: `1px solid ${colors.success}30`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ fontSize: '11px', color: colors.success, fontWeight: 600 }}>
+            Viewing: {viewingSavedResponse.name}
+          </span>
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={() => setViewingSavedResponse(null)}
+            style={{
+              ...ghostButton,
+              fontSize: '10px',
+              padding: '2px 8px',
+              color: colors.textDim,
+            }}
+          >
+            Back to Live
+          </button>
+        </div>
+      )}
 
       {/* Body */}
       {tab === 'response' ? (
         <ResponseView
-          response={response}
-          latestResult={latestResult}
-          waitingForResult={waitingForResult}
-          waitingStartTime={waitingStartTime}
-          isSending={isSending}
+          response={viewingSavedResponse ? viewingSavedResponse.response : response}
+          latestResult={viewingSavedResponse ? (viewingSavedResponse.activityResult ?? null) : latestResult}
+          waitingForResult={viewingSavedResponse ? false : waitingForResult}
+          waitingStartTime={viewingSavedResponse ? null : waitingStartTime}
+          isSending={viewingSavedResponse ? false : isSending}
           isConnected={isConnected}
           onCancelWaiting={cancelWaiting}
         />
@@ -163,7 +409,7 @@ function ResponseView({
   isConnected,
   onCancelWaiting,
 }: {
-  response: ReturnType<typeof useRequestStore.getState>['response'];
+  response: ReturnType<typeof useTabStore.getState>['tabs'][0]['response'];
   latestResult: Record<string, unknown> | null;
   waitingForResult: boolean;
   waitingStartTime: number | null;

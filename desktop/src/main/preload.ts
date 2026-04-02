@@ -11,6 +11,10 @@ const api: IntentPostmanAPI = {
   sendCommand: (method: string, params: Record<string, unknown>) =>
     ipcRenderer.invoke('command:send', method, params),
 
+  loadCollections: () => ipcRenderer.invoke('collections:load'),
+
+  saveCollections: (data) => ipcRenderer.invoke('collections:save', data),
+
   onDeviceChange: (callback) => {
     ipcRenderer.on('devices:changed', (_event, devices) => callback(devices));
   },

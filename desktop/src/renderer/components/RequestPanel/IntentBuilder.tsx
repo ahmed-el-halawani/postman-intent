@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { useRequestStore } from '../../store/requestStore';
+import { useTabStore } from '../../store/tabStore';
 import { colors, input, monoInput, label } from '../../styles';
 import { COMMON_ACTIONS, INTENT_FLAGS } from '../../../shared/types';
 import ExtrasEditor from './ExtrasEditor';
 
 export default function IntentBuilder() {
-  const { request, updateRequest } = useRequestStore();
+  const tab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const updateRequest = useTabStore((s) => s.updateRequest);
+  const request = tab?.request || { action: '', component: '', data: '', mimeType: '', categories: [] as string[], flags: [] as string[], intentType: 'activity' as const, extras: [], forResult: false };
   const [showActions, setShowActions] = useState(false);
   const [actionFilter, setActionFilter] = useState('');
   const actionRef = useRef<HTMLDivElement>(null);

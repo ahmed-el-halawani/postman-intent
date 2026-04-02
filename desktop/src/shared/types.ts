@@ -41,6 +41,8 @@ export interface IntentPostmanAPI {
   connectDevice: (serial: string) => Promise<{ success: boolean; error?: string }>;
   disconnectDevice: () => Promise<void>;
   sendCommand: (method: string, params: Record<string, unknown>) => Promise<JsonRpcResponse>;
+  loadCollections: () => Promise<CollectionsData>;
+  saveCollections: (data: CollectionsData) => Promise<void>;
   onDeviceChange: (callback: (devices: Device[]) => void) => void;
   onNotification: (callback: (notification: JsonRpcNotification) => void) => void;
   onConnectionStatus: (callback: (status: ConnectionStatus) => void) => void;
@@ -125,6 +127,55 @@ export interface HistoryEntry {
   request: IntentRequest;
   response: JsonRpcResponse | null;
   responseTime: number | null;
+}
+
+// ── Tab System ───────────────────────────────────────────────
+
+export interface RequestTab {
+  id: string;
+  name: string;
+  request: IntentRequest;
+  savedRequestRef: { collectionId: string; requestId: string } | null;
+  isDirty: boolean;
+  response: JsonRpcResponse | null;
+  responseTime: number | null;
+  isSending: boolean;
+  waitingForResult: boolean;
+  waitingRequestId: string | null;
+  waitingStartTime: number | null;
+}
+
+// ── Collections ──────────────────────────────────────────────
+
+export interface SavedResponse {
+  id: string;
+  name: string;
+  response: JsonRpcResponse;
+  activityResult: Record<string, unknown> | null;
+  responseTime: number | null;
+  savedAt: number;
+}
+
+export interface SavedRequest {
+  id: string;
+  name: string;
+  request: IntentRequest;
+  savedResponses: SavedResponse[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  requests: SavedRequest[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CollectionsData {
+  version: 1;
+  collections: Collection[];
 }
 
 declare global {

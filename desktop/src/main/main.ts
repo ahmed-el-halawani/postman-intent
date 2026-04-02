@@ -1,8 +1,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { listDevices, trackDevices, openTcpConnection } from './adb';
 import { CommandSocket } from './socket';
-import type { ConnectionStatus } from '../shared/types';
+import type { ConnectionStatus, CollectionsData } from '../shared/types';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 if (require('electron-squirrel-startup')) {
@@ -125,6 +126,34 @@ ipcMain.handle(
     }
   }
 );
+
+// ── Collections Persistence ──────────────────────────────────
+
+function getCollectionsPath(): string {
+  return path.join(app.getPath('userData'), 'collections.json');
+}
+
+ipcMain.handle('collections:load', async () => {
+  try {
+    const filePath = getCollectionsPath();
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(data) as CollectionsData;
+    }
+  } catch (err) {
+    console.error('Failed to load collections:', err);
+  }
+  return { version: 1, collections: [] } as CollectionsData;
+});
+
+ipcMain.handle('collections:save', async (_event, data: CollectionsData) => {
+  try {
+    const filePath = getCollectionsPath();
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save collections:', err);
+  }
+});
 
 // ── App Lifecycle ─────────────────────────────────────────────
 
