@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.gson.JsonArray
@@ -56,6 +57,16 @@ class ResultActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.e(TAG, "onCreate: ResultActivity" )
+
+
+        // Make this activity click-through so touches pass to the target activity below
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        )
 
         Log.e(TAG, "onCreate: ", )
 
@@ -74,7 +85,6 @@ class ResultActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start activity for result", e)
             deliverResult(RESULT_CANCELED, null)
-            finish()
         }
     }
 

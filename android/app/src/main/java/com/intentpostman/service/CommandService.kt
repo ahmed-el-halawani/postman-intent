@@ -77,7 +77,8 @@ class CommandService : Service() {
     fun getServer(): CommandServer? = server
 
     private fun startServer(port: Int) {
-        stopServer()
+        // Don't restart if already running — avoids killing active TCP connections
+        if (server != null) return
 
         server = CommandServer(applicationContext, port).apply {
             onStatusChange = { status ->

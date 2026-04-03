@@ -7,46 +7,67 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.intentpostman.service.CommandService
+import com.intentpostman.service.FloatingIndicatorService
 
 /**
- * Headless launcher activity.
- * Starts the CommandService foreground service and stays alive but invisible
- * (translucent theme). Does NOT finish() because Android restricts background
- * activity launches — the app must remain in the task stack so the service
- * can start activities.
- *
- * Also requests SYSTEM_ALERT_WINDOW (draw over other apps) so activities
- * launched by the service can appear even when another app is in foreground.
+ * Transparent, click-through launcher activity that stays in the foreground.
+ * - Touches pass through to whatever app is below
+ * - Starts CommandService (TCP server) and FloatingIndicatorService (overlay badge)
+ * - Requests POST_NOTIFICATIONS and SYSTEM_ALERT_WINDOW permissions
+ * - Stays alive so the service can launch activities without background restrictions
+ * - onNewIntent handles re-launches via ADB without re-triggering server start
  */
 class MainActivity : ComponentActivity() {
 
+    private  val TAG = "MainActivity"
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
-        // After notification permission result, request overlay permission
-        requestOverlayPermission()
+        checkOverlayAndStart()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.e(TAG, "onCreate: mainactivity" )
 
-        // Request notification permission for Android 13+ (needed for foreground service notification)
+        // Make this activity fully click-through — touches pass to apps below
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        )
+
+        // Request notification permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            requestOverlayPermission()
+            checkOverlayAndStart()
         }
     }
 
-    private fun requestOverlayPermission() {
-        // Request SYSTEM_ALERT_WINDOW if not already granted
+    override fun onResume() {
+        super.onResume()
+        finish()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Re-launched via ADB am start --activity-single-top.
+        // Don't re-request permissions or restart services — they're already running.
+    }
+
+    private fun checkOverlayAndStart() {
+        // Request SYSTEM_ALERT_WINDOW if not granted
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -55,17 +76,17 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
         }
 
-        startServer()
-    }
-
-    private fun startServer() {
-        val intent = Intent(this, CommandService::class.java).apply {
+        // Start the TCP command server
+        val serviceIntent = Intent(this, CommandService::class.java).apply {
             action = CommandService.ACTION_START
             putExtra(CommandService.EXTRA_PORT, CommandService.DEFAULT_PORT)
         }
-        startForegroundService(intent)
-//
-//        // Move task to back — activity stays alive but user sees their previous app
-//        moveTaskToBack(true)
+        startForegroundService(serviceIntent)
+
+        // Start the floating indicator overlay
+        if (Settings.canDrawOverlays(this)) {
+            startService(Intent(this, FloatingIndicatorService::class.java))
+        }
+        finish()
     }
 }

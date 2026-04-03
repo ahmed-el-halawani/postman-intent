@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { listDevices, trackDevices, openTcpConnection, ensureAppRunning } from './adb';
+import { listDevices, trackDevices, openTcpConnection, launchApp } from './adb';
 import { CommandSocket } from './socket';
 import type { ConnectionStatus, CollectionsData } from '../shared/types';
 
@@ -13,6 +13,7 @@ if (require('electron-squirrel-startup')) {
 let mainWindow: BrowserWindow | null = null;
 let commandSocket: CommandSocket | null = null;
 let deviceTracker: { cancel: () => void } | null = null;
+let connectedSerial: string | null = null;
 
 function sendToRenderer(channel: string, ...args: unknown[]) {
   mainWindow?.webContents.send(channel, ...args);
@@ -73,8 +74,9 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
       commandSocket.disconnect();
     }
 
-    // Ensure the Android app is running before attempting connection
-    await ensureAppRunning(serial);
+    // Launch the Android app (always, no check)
+    await launchApp(serial);
+    await new Promise((r) => setTimeout(r, 2000));
 
     // Open TCP connection with retry (server may still be starting)
     let stream: import('stream').Duplex | null = null;
@@ -88,6 +90,7 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
       }
     }
 
+    connectedSerial = serial;
     commandSocket = new CommandSocket();
     commandSocket.connect(stream!);
 
@@ -98,6 +101,7 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
 
     // Handle disconnection
     commandSocket.onDisconnect(() => {
+      connectedSerial = null;
       setConnectionStatus('disconnected');
     });
 
@@ -113,12 +117,49 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
 ipcMain.handle('devices:disconnect', async () => {
   commandSocket?.disconnect();
   commandSocket = null;
+  connectedSerial = null;
   setConnectionStatus('disconnected');
 });
 
 ipcMain.handle(
   'command:send',
   async (_event, method: string, params: Record<string, unknown>) => {
+    // If not connected but we have a serial, try to auto-reconnect
+    if (!commandSocket?.isConnected && connectedSerial) {
+      try {
+        await launchApp(connectedSerial);
+        await new Promise((r) => setTimeout(r, 2000));
+
+        let stream: import('stream').Duplex | null = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            stream = await openTcpConnection(connectedSerial, 5000);
+            break;
+          } catch (err) {
+            if (attempt === 3) throw err;
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+
+        commandSocket = new CommandSocket();
+        commandSocket.connect(stream!);
+        commandSocket.onNotification((notification) => {
+          sendToRenderer('command:notification', notification);
+        });
+        commandSocket.onDisconnect(() => {
+          connectedSerial = null;
+          setConnectionStatus('disconnected');
+        });
+        setConnectionStatus('connected');
+      } catch {
+        return {
+          jsonrpc: '2.0',
+          id: '',
+          error: { code: -1, message: 'Failed to auto-reconnect to device' },
+        };
+      }
+    }
+
     if (!commandSocket?.isConnected) {
       return {
         jsonrpc: '2.0',

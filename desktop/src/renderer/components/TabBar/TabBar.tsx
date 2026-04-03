@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTabStore } from '../../store/tabStore';
 import { colors } from '../../styles';
 import type { IntentType } from '../../../shared/types';
@@ -13,6 +13,14 @@ export default function TabBar() {
   const { tabs, activeTabId, setActiveTab, createTab, closeTab, renameTab } = useTabStore();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to end whenever a new tab is added
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [tabs.length]);
 
   const handleStartRename = (id: string, currentName: string) => {
     setRenamingId(id);
@@ -33,20 +41,23 @@ export default function TabBar() {
         alignItems: 'stretch',
         background: colors.bg,
         borderBottom: `1px solid ${colors.border}`,
-        minHeight: '34px',
+        height: '34px',
         overflow: 'hidden',
         position: 'relative',
       }}
     >
       {/* Scrollable tab area */}
       <div
+        ref={scrollRef}
         style={{
           display: 'flex',
           flex: 1,
-          overflow: 'auto',
+          overflowX: 'auto',
+          overflowY: 'hidden',
           scrollbarWidth: 'none',
         }}
       >
+        <style>{`div::-webkit-scrollbar { display: none; }`}</style>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const typeColor = TYPE_COLORS[tab.request.intentType];
@@ -184,22 +195,23 @@ export default function TabBar() {
         })}
       </div>
 
-      {/* New tab button — sticky at end */}
+      {/* New tab button — always pinned at end */}
       <button
         onClick={() => createTab()}
         style={{
-          background: colors.bg,
+          background: colors.surface,
           border: 'none',
           borderLeft: `1px solid ${colors.border}`,
+          borderBottom: `1px solid ${colors.border}`,
           color: colors.textDim,
           cursor: 'pointer',
           fontSize: '16px',
           padding: '0 12px',
           transition: 'color 0.1s',
           flexShrink: 0,
-          position: 'sticky',
-          right: 0,
-          zIndex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         onMouseEnter={(e) => {
           (e.target as HTMLElement).style.color = colors.text;

@@ -64,45 +64,24 @@ export async function openTcpConnection(
 }
 
 /**
- * Ensure the Intent Postman Android app is running on the device.
- * If the process is not alive, launch it via `am start` and wait for the server to start.
+ * Launch the Intent Postman Android app via ADB.
+ * Always launches — no check. Idempotent if already running.
  */
-export async function ensureAppRunning(serial: string): Promise<void> {
-  const PACKAGE = 'com.intentpostman';
-  const ACTIVITY = `${PACKAGE}/.ui.MainActivity`;
-
+export async function launchApp(serial: string): Promise<void> {
   try {
-    // Check if the app process is running
-    const pidStream = await client.shell(serial, `pidof ${PACKAGE}`);
-    const pidOutput = await readStreamToString(pidStream);
-
-    if (pidOutput.trim()) {
-      // Process is alive — foreground service is running
-      return;
-    }
+    const stream = await client.shell(
+      serial,
+      'am start --activity-single-top -n com.intentpostman/.ui.MainActivity'
+    );
+    // Consume the stream output
+    await new Promise<void>((resolve, reject) => {
+      stream.on('data', () => {});
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
   } catch {
-    // pidof failed — app not running
+    // Best effort
   }
-
-  // Launch the app
-  try {
-    const launchStream = await client.shell(serial, `am start -n ${ACTIVITY}`);
-    await readStreamToString(launchStream); // consume output
-  } catch {
-    // Best effort — connection retry will handle failures
-  }
-
-  // Wait for the server to bind the port
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-}
-
-function readStreamToString(stream: NodeJS.ReadableStream): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    stream.on('error', reject);
-  });
 }
 
 export { client as adbClient };

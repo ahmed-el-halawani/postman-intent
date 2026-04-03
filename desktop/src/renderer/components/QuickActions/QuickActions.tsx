@@ -28,7 +28,7 @@ export default function QuickActions() {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'common' | 'device'>('all');
   const [loading, setLoading] = useState(false);
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
-  const { updateRequest } = useTabStore();
+  const { createTab } = useTabStore();
   const isConnected = connectionStatus === 'connected';
 
   const fetchQuickActions = async () => {
@@ -65,7 +65,7 @@ export default function QuickActions() {
   });
 
   const applyAction = (action: QuickAction) => {
-    updateRequest({
+    const request = {
       intentType: action.type as IntentType,
       action: action.action,
       component: action.component || '',
@@ -82,7 +82,8 @@ export default function QuickActions() {
             value: e.value,
           }))
         : [],
-    });
+    };
+    createTab(action.label, request);
   };
 
   if (!isConnected) {
