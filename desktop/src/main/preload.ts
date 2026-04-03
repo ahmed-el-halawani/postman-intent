@@ -32,6 +32,12 @@ const api: IntentPostmanAPI = {
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
   },
+
+  // AIDL operations
+  compileAidl: (definition, sdkConfig) => ipcRenderer.invoke('aidl:compile', definition, sdkConfig),
+  pushAidlJar: (localJarPath) => ipcRenderer.invoke('aidl:push', localJarPath),
+  loadAidlConfig: () => ipcRenderer.invoke('aidl:loadConfig'),
+  saveAidlConfig: (config) => ipcRenderer.invoke('aidl:saveConfig', config),
 };
 
 contextBridge.exposeInMainWorld('intentPostman', api);

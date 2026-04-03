@@ -35,6 +35,64 @@ export interface JsonRpcError {
 // Connection status
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
+// AIDL types
+export interface AidlDefinition {
+  packageName: string;
+  interfaceName: string;
+  methods: AidlMethod[];
+}
+
+export interface AidlMethod {
+  name: string;
+  returnType: string;
+  params: AidlParam[];
+}
+
+export interface AidlParam {
+  name: string;
+  type: string;
+}
+
+export interface AidlSdkConfig {
+  sdkPath: string;
+  buildToolsVersion: string;
+  platformVersion: string;
+}
+
+export interface AidlCompileResult {
+  success: boolean;
+  jarPath?: string;
+  remotePath?: string;
+  error?: string;
+  stage?: string;
+  output?: string;
+}
+
+export interface AidlLoadedInterface {
+  interfaceId: string;
+  packageName: string;
+  interfaceName: string;
+  methods: Array<{
+    name: string;
+    returnType: string;
+    paramTypes: string[];
+  }>;
+  jarRemotePath: string;
+}
+
+export interface AidlBinding {
+  bindingId: string;
+  interfaceId: string;
+  component: string;
+  connected: boolean;
+  proxyClass: string;
+  methods: Array<{
+    name: string;
+    returnType: string;
+    paramTypes: string[];
+  }>;
+}
+
 // IPC API exposed to renderer via preload
 export interface IntentPostmanAPI {
   listDevices: () => Promise<Device[]>;
@@ -47,6 +105,12 @@ export interface IntentPostmanAPI {
   onNotification: (callback: (notification: JsonRpcNotification) => void) => void;
   onConnectionStatus: (callback: (status: ConnectionStatus) => void) => void;
   removeAllListeners: (channel: string) => void;
+
+  // AIDL operations
+  compileAidl: (definition: AidlDefinition, sdkConfig: AidlSdkConfig) => Promise<AidlCompileResult>;
+  pushAidlJar: (localJarPath: string) => Promise<{ remotePath: string }>;
+  loadAidlConfig: () => Promise<AidlSdkConfig>;
+  saveAidlConfig: (config: AidlSdkConfig) => Promise<void>;
 }
 
 // Intent request types
@@ -119,6 +183,7 @@ export interface IntentRequest {
   flags: string[];
   extras: IntentExtra[];
   forResult: boolean;
+  aidlDefinition?: AidlDefinition;
 }
 
 export interface HistoryEntry {

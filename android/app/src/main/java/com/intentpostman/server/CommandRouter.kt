@@ -8,6 +8,7 @@ import com.intentpostman.handlers.BroadcastHandler
 import com.intentpostman.handlers.IntentHandler
 import com.intentpostman.handlers.PackageQueryHandler
 import com.intentpostman.handlers.ServiceHandler
+import com.intentpostman.handlers.AidlHandler
 
 class CommandRouter(
     private val context: Context,
@@ -19,6 +20,7 @@ class CommandRouter(
     private val packageQueryHandler = PackageQueryHandler(context)
     private val broadcastHandler = BroadcastHandler(context, pushNotification)
     private val serviceHandler = ServiceHandler(context, pushNotification)
+    private val aidlHandler = AidlHandler(context, pushNotification)
 
     init {
         // System handlers
@@ -49,11 +51,20 @@ class CommandRouter(
         registerHandler("package.getQuickActions") { params -> packageQueryHandler.getQuickActions(params) }
         registerHandler("package.listPackages") { params -> packageQueryHandler.listPackages(params) }
         registerHandler("package.queryIntents") { params -> packageQueryHandler.queryPackageIntents(params) }
+
+        // AIDL handlers
+        registerHandler("aidl.load") { params -> aidlHandler.loadInterface(params) }
+        registerHandler("aidl.bind") { params -> aidlHandler.bindService(params) }
+        registerHandler("aidl.call") { params -> aidlHandler.callMethod(params) }
+        registerHandler("aidl.listLoaded") { params -> aidlHandler.listLoaded(params) }
+        registerHandler("aidl.unload") { params -> aidlHandler.unloadInterface(params) }
+        registerHandler("aidl.unbind") { params -> aidlHandler.unbindService(params) }
     }
 
     fun cleanup() {
         broadcastHandler.cleanup()
         serviceHandler.cleanup()
+        aidlHandler.cleanup()
     }
 
     fun registerHandler(method: String, handler: suspend (JsonObject?) -> JsonElement) {

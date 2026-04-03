@@ -84,4 +84,13 @@ export async function launchApp(serial: string): Promise<void> {
   }
 }
 
+export async function pushFile(serial: string, localPath: string, remotePath: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stream = await (client as any).push(serial, localPath, remotePath);
+  return new Promise((resolve, reject) => {
+    stream.on('end', resolve);
+    stream.on('error', reject);
+  });
+}
+
 export { client as adbClient };

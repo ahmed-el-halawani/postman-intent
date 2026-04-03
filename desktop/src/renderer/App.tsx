@@ -53,6 +53,14 @@ export default function App() {
         useServiceStore.getState().handleServiceDisconnected(notification.params);
       }
 
+      // Route AIDL notifications to serviceStore
+      if (notification.method === 'aidl.connected' && notification.params) {
+        useServiceStore.getState().handleAidlConnected(notification.params);
+      }
+      if (notification.method === 'aidl.disconnected' && notification.params) {
+        useServiceStore.getState().handleAidlDisconnected(notification.params);
+      }
+
       // Cancel waiting state on any tab when activity result arrives
       if (notification.method === 'intent.result') {
         useTabStore.getState().cancelWaiting();

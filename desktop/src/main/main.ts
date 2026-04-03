@@ -1,9 +1,10 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { listDevices, trackDevices, openTcpConnection, launchApp } from './adb';
+import { listDevices, trackDevices, openTcpConnection, launchApp, pushFile } from './adb';
 import { CommandSocket } from './socket';
-import type { ConnectionStatus, CollectionsData } from '../shared/types';
+import type { ConnectionStatus, CollectionsData, AidlDefinition, AidlSdkConfig } from '../shared/types';
+import { compileAidl, loadAidlConfig, saveAidlConfig } from './aidlCompiler';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 if (require('electron-squirrel-startup')) {
@@ -206,6 +207,27 @@ ipcMain.handle('collections:save', async (_event, data: CollectionsData) => {
   } catch (err) {
     console.error('Failed to save collections:', err);
   }
+});
+
+// ── AIDL Handlers ─────────────────────────────────────────────
+
+ipcMain.handle('aidl:compile', async (_event, definition: AidlDefinition, sdkConfig: AidlSdkConfig) => {
+  return compileAidl(sdkConfig, definition);
+});
+
+ipcMain.handle('aidl:push', async (_event, localJarPath: string) => {
+  if (!connectedSerial) throw new Error('Not connected to device');
+  const remotePath = `/data/local/tmp/aidl_${Date.now()}.jar`;
+  await pushFile(connectedSerial, localJarPath, remotePath);
+  return { remotePath };
+});
+
+ipcMain.handle('aidl:loadConfig', async () => {
+  return loadAidlConfig();
+});
+
+ipcMain.handle('aidl:saveConfig', async (_event, config: AidlSdkConfig) => {
+  await saveAidlConfig(config);
 });
 
 // ── App Lifecycle ─────────────────────────────────────────────
