@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
 import android.os.IBinder
 import android.os.Messenger
 import android.os.Message
@@ -185,22 +186,40 @@ class ServiceHandler(
         }
 
         val binder = binding.binder!!
+        val isProxy = binder.javaClass.name == "android.os.BinderProxy"
+
+        if (isProxy) {
+            throw JsonRpcException(-1003,
+                "Cannot call methods on a cross-process service via reflection. " +
+                "The binder is a BinderProxy (remote process). " +
+                "LocalBinder pattern only works within the same process. " +
+                "For cross-process IPC, the target service must use AIDL or Messenger. " +
+                "You can use the 'Send Message' section to communicate via Messenger pattern.")
+        }
 
         try {
-            // Try to find the getService() method pattern (LocalBinder pattern)
+            // Try LocalBinder pattern: binder.getService() returns the Service,
+            // then search the method on the Service first, fall back to binder
             val serviceObj = tryGetServiceFromBinder(binder)
-            val target = serviceObj ?: binder
 
-            // Find and invoke the method
-            val method = findMethod(target, methodName)
-                ?: throw JsonRpcException(-1003, "Method '$methodName' not found on ${target.javaClass.name}")
+            // Search order: service object -> binder itself
+            val (target, method) = when {
+                serviceObj != null && findMethod(serviceObj, methodName) != null ->
+                    serviceObj to findMethod(serviceObj, methodName)!!
+                findMethod(binder, methodName) != null ->
+                    binder to findMethod(binder, methodName)!!
+                else -> throw JsonRpcException(-1003,
+                    "Method '$methodName' not found on ${serviceObj?.javaClass?.name ?: binder.javaClass.name}")
+            }
 
             val args = buildMethodArgs(method, params.getAsJsonArray("args"))
+            method.isAccessible = true
             val result = method.invoke(target, *args)
 
             return JsonObject().apply {
                 addProperty("status", "success")
                 addProperty("method", methodName)
+                addProperty("targetClass", target.javaClass.name)
                 if (result != null) {
                     addProperty("result", result.toString())
                     addProperty("resultType", result.javaClass.simpleName)
@@ -332,7 +351,50 @@ class ServiceHandler(
         params.get("package")?.asString?.takeIf { it.isNotBlank() }?.let {
             intent.setPackage(it)
         }
+        params.get("data")?.asString?.takeIf { it.isNotBlank() }?.let {
+            intent.data = Uri.parse(it)
+        }
+        params.get("mimeType")?.asString?.takeIf { it.isNotBlank() }?.let {
+            intent.type = it
+        }
+        params.getAsJsonArray("extras")?.forEach { extraEl ->
+            val extra = extraEl.asJsonObject
+            val key = extra.get("key")?.asString ?: return@forEach
+            val type = extra.get("type")?.asString ?: "string"
+            val value = extra.get("value") ?: return@forEach
+            putExtra(intent, key, type, value)
+        }
         return intent
+    }
+
+    private fun putExtra(intent: Intent, key: String, type: String, value: JsonElement) {
+        try {
+            when (type) {
+                "string" -> intent.putExtra(key, value.asString)
+                "int" -> intent.putExtra(key, value.asString.toInt())
+                "long" -> intent.putExtra(key, value.asString.toLong())
+                "float" -> intent.putExtra(key, value.asString.toFloat())
+                "double" -> intent.putExtra(key, value.asString.toDouble())
+                "bool" -> intent.putExtra(key, value.asString.toBooleanStrict())
+                "uri" -> intent.putExtra(key, Uri.parse(value.asString))
+                "string_array" -> {
+                    if (value.isJsonArray) {
+                        intent.putExtra(key, value.asJsonArray.map { it.asString }.toTypedArray())
+                    } else {
+                        intent.putExtra(key, value.asString.split(",").map { it.trim() }.toTypedArray())
+                    }
+                }
+                "int_array" -> {
+                    if (value.isJsonArray) {
+                        intent.putExtra(key, value.asJsonArray.map { it.asInt }.toIntArray())
+                    } else {
+                        intent.putExtra(key, value.asString.split(",").map { it.trim().toInt() }.toIntArray())
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            throw JsonRpcException(-32602, "Invalid extra value for key '$key' (type=$type): ${e.message}")
+        }
     }
 
     private fun tryGetServiceFromBinder(binder: IBinder): Any? {

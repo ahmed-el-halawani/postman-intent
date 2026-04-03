@@ -36,6 +36,7 @@ export default function CollectionsTab() {
     deleteCollection,
     duplicateCollection,
     exportCollection,
+    importCollection,
     deleteRequest,
     duplicateRequest,
     addBlankRequest,
@@ -61,6 +62,23 @@ export default function CollectionsTab() {
   const [renamingResponseCollectionId, setRenamingResponseCollectionId] = useState<string | null>(null);
   const [renamingResponseRequestId, setRenamingResponseRequestId] = useState<string | null>(null);
   const [renameResponseValue, setRenameResponseValue] = useState('');
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = importCollection(reader.result as string);
+      if (!result) {
+        window.alert('Invalid collection file. Expected JSON with "name" and "requests" fields.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset so same file can be re-imported
+    e.target.value = '';
+  };
 
   const handleCreate = () => {
     if (!newName.trim()) return;
@@ -265,6 +283,24 @@ export default function CollectionsTab() {
         }}
       >
         <span style={{ ...label, margin: 0, flex: 1 }}>Collections</span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={handleImport}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            ...ghostButton,
+            fontSize: '11px',
+            padding: '2px 8px',
+          }}
+          title="Import collection from JSON"
+        >
+          Import
+        </button>
         <button
           onClick={() => setIsCreating(true)}
           style={{

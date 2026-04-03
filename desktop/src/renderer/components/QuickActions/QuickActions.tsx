@@ -73,6 +73,7 @@ export default function QuickActions() {
       mimeType: action.mimeType || '',
       flags: [],
       categories: [],
+      forResult: action.forResult || false,
       extras: action.extras
         ? action.extras.map((e) => ({
             id: crypto.randomUUID(),
@@ -82,11 +83,6 @@ export default function QuickActions() {
           }))
         : [],
     });
-
-    // Also set forResult in the store
-    if (action.forResult) {
-      useTabStore.getState().updateRequest({ forResult: true } as any);
-    }
   };
 
   if (!isConnected) {

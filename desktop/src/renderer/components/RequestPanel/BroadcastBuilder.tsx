@@ -1,45 +1,56 @@
 import React, { useState } from 'react';
 import { useBroadcastStore } from '../../store/broadcastStore';
+import { useTabStore } from '../../store/tabStore';
 import { useDeviceStore } from '../../store/deviceStore';
-import { colors, input, monoInput, label, accentButton, ghostButton } from '../../styles';
+import { colors, monoInput, label, accentButton, ghostButton } from '../../styles';
+import ExtrasEditor from './ExtrasEditor';
 
 export default function BroadcastBuilder() {
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
 
+  // Read from tab request (shared with save/quickActions)
+  const tab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const updateRequest = useTabStore((s) => s.updateRequest);
+  const setActiveTabResponse = useTabStore((s) => s.setActiveTabResponse);
+  const setActiveTabSending = useTabStore((s) => s.setActiveTabSending);
+  const request = tab?.request;
+
   const {
     listeners,
     events,
-    isSending,
-    lastResponse,
-    lastResponseTime,
-    sendBroadcast,
     startListener,
     stopListener,
     stopAllListeners,
     clearEvents,
   } = useBroadcastStore();
 
-  // Send broadcast form
-  const [action, setAction] = useState('');
-  const [pkg, setPkg] = useState('');
-  const [extraKey, setExtraKey] = useState('');
-  const [extraValue, setExtraValue] = useState('');
-  const [extras, setExtras] = useState<Array<{ key: string; value: string }>>([]);
+  const [isSending, setIsSending] = useState(false);
 
   // Listener form
   const [listenAction, setListenAction] = useState('');
 
   const handleSendBroadcast = async () => {
-    if (!action) return;
-    await sendBroadcast(action, pkg || undefined, extras.length > 0 ? extras : undefined);
-  };
+    if (!request?.action) return;
+    setIsSending(true);
+    setActiveTabSending(true);
 
-  const handleAddExtra = () => {
-    if (!extraKey) return;
-    setExtras([...extras, { key: extraKey, value: extraValue }]);
-    setExtraKey('');
-    setExtraValue('');
+    const params: Record<string, unknown> = { action: request.action };
+    if (request.component) params.package = request.component;
+    if (request.data) params.data = request.data;
+    if (request.mimeType) params.mimeType = request.mimeType;
+    if (request.extras.length > 0) {
+      params.extras = request.extras
+        .filter((e) => e.key)
+        .map((e) => ({ key: e.key, type: e.type, value: e.value }));
+    }
+
+    const start = performance.now();
+    const response = await window.intentPostman.sendCommand('broadcast.send', params);
+    const elapsed = Math.round(performance.now() - start);
+
+    setIsSending(false);
+    setActiveTabResponse(response, elapsed);
   };
 
   const handleStartListening = async () => {
@@ -47,6 +58,8 @@ export default function BroadcastBuilder() {
     await startListener(listenAction);
     setListenAction('');
   };
+
+  if (!request) return null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -61,8 +74,8 @@ export default function BroadcastBuilder() {
             <div style={label}>Action *</div>
             <input
               style={monoInput}
-              value={action}
-              onChange={(e) => setAction(e.target.value)}
+              value={request.action}
+              onChange={(e) => updateRequest({ action: e.target.value })}
               placeholder="android.intent.action.MY_BROADCAST"
             />
           </div>
@@ -71,101 +84,49 @@ export default function BroadcastBuilder() {
             <div style={label}>Target Package (optional)</div>
             <input
               style={monoInput}
-              value={pkg}
-              onChange={(e) => setPkg(e.target.value)}
+              value={request.component}
+              onChange={(e) => updateRequest({ component: e.target.value })}
               placeholder="com.example.app"
             />
           </div>
 
-          {/* Extras */}
-          <div>
-            <div style={label}>Extras</div>
-            {extras.map((e, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  marginBottom: '4px',
-                  padding: '4px 8px',
-                  background: colors.bg,
-                  borderRadius: '3px',
-                  fontSize: '12px',
-                  fontFamily: 'monospace',
-                  color: colors.text,
-                }}
-              >
-                <span style={{ color: '#d2a8ff' }}>{e.key}</span>
-                <span style={{ color: colors.textDim }}>=</span>
-                <span style={{ color: '#a5d6ff', flex: 1 }}>{e.value}</span>
-                <button
-                  onClick={() => setExtras(extras.filter((_, j) => j !== i))}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: colors.error,
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    padding: '0 4px',
-                  }}
-                >
-                  x
-                </button>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: '6px' }}>
+          {/* Data URI + MIME Type */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 2 }}>
+              <div style={label}>Data URI</div>
               <input
-                style={{ ...monoInput, flex: 1 }}
-                value={extraKey}
-                onChange={(e) => setExtraKey(e.target.value)}
-                placeholder="key"
+                style={monoInput}
+                value={request.data}
+                onChange={(e) => updateRequest({ data: e.target.value })}
+                placeholder="content://... or custom URI"
               />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={label}>MIME Type</div>
               <input
-                style={{ ...monoInput, flex: 1 }}
-                value={extraValue}
-                onChange={(e) => setExtraValue(e.target.value)}
-                placeholder="value"
-                onKeyDown={(e) => e.key === 'Enter' && handleAddExtra()}
+                style={monoInput}
+                value={request.mimeType}
+                onChange={(e) => updateRequest({ mimeType: e.target.value })}
+                placeholder="text/plain"
               />
-              <button
-                onClick={handleAddExtra}
-                style={{ ...ghostButton, padding: '4px 10px', fontSize: '11px' }}
-              >
-                +
-              </button>
             </div>
           </div>
+
+          {/* Extras — reuse the shared ExtrasEditor */}
+          <ExtrasEditor />
 
           <button
             style={{
               ...accentButton,
               background: colors.intentBroadcast,
-              opacity: !action || isSending || !isConnected ? 0.5 : 1,
+              opacity: !request.action || isSending || !isConnected ? 0.5 : 1,
               marginTop: '4px',
             }}
             onClick={handleSendBroadcast}
-            disabled={!action || isSending || !isConnected}
+            disabled={!request.action || isSending || !isConnected}
           >
             {isSending ? 'Sending...' : 'Send Broadcast'}
           </button>
-
-          {lastResponse && (
-            <div
-              style={{
-                padding: '6px 8px',
-                background: colors.codeBg,
-                borderRadius: '3px',
-                fontSize: '11px',
-                fontFamily: 'monospace',
-                color: lastResponse.error ? colors.error : colors.success,
-              }}
-            >
-              {lastResponse.error
-                ? `Error: ${lastResponse.error.message}`
-                : `Sent (${lastResponseTime}ms)`}
-            </div>
-          )}
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { listDevices, trackDevices, openTcpConnection } from './adb';
+import { listDevices, trackDevices, openTcpConnection, ensureAppRunning } from './adb';
 import { CommandSocket } from './socket';
 import type { ConnectionStatus, CollectionsData } from '../shared/types';
 
@@ -73,11 +73,23 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
       commandSocket.disconnect();
     }
 
-    // Open TCP connection to Android app on port 5000
-    const stream = await openTcpConnection(serial, 5000);
+    // Ensure the Android app is running before attempting connection
+    await ensureAppRunning(serial);
+
+    // Open TCP connection with retry (server may still be starting)
+    let stream: import('stream').Duplex | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        stream = await openTcpConnection(serial, 5000);
+        break;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
 
     commandSocket = new CommandSocket();
-    commandSocket.connect(stream);
+    commandSocket.connect(stream!);
 
     // Forward notifications to renderer
     commandSocket.onNotification((notification) => {

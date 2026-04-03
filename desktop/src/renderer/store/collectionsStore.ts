@@ -40,6 +40,9 @@ interface CollectionsState {
   renameResponse: (collectionId: string, requestId: string, responseId: string, name: string) => void;
   deleteResponse: (collectionId: string, requestId: string, responseId: string) => void;
 
+  // Import
+  importCollection: (jsonString: string) => string | null;
+
   // UI
   toggleExpanded: (id: string) => void;
 }
@@ -395,6 +398,59 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
       ),
     }));
     debouncedSave(get());
+  },
+
+  importCollection: (jsonString) => {
+    try {
+      const data = JSON.parse(jsonString);
+      if (!data.name || !Array.isArray(data.requests)) {
+        return null;
+      }
+      const id = uuidv4();
+      const now = Date.now();
+      const imported: Collection = {
+        id,
+        name: data.name,
+        requests: data.requests.map((r: any) => ({
+          id: uuidv4(),
+          name: r.name || 'Imported Request',
+          request: {
+            intentType: r.request?.intentType || 'activity',
+            action: r.request?.action || '',
+            component: r.request?.component || '',
+            categories: r.request?.categories || [],
+            data: r.request?.data || '',
+            mimeType: r.request?.mimeType || '',
+            flags: r.request?.flags || [],
+            extras: (r.request?.extras || []).map((e: any) => ({
+              id: uuidv4(),
+              key: e.key || '',
+              type: e.type || 'string',
+              value: e.value || '',
+            })),
+            forResult: r.request?.forResult || false,
+          },
+          savedResponses: (r.savedResponses || []).map((sr: any) => ({
+            ...sr,
+            id: uuidv4(),
+            request: sr.request || r.request,
+            activityResult: sr.activityResult ?? null,
+          })),
+          createdAt: r.createdAt || now,
+          updatedAt: r.updatedAt || now,
+        })),
+        createdAt: now,
+        updatedAt: now,
+      };
+      set((state) => ({
+        collections: [...state.collections, imported],
+        expandedIds: new Set([...state.expandedIds, id]),
+      }));
+      debouncedSave(get());
+      return id;
+    } catch {
+      return null;
+    }
   },
 
   toggleExpanded: (id) => {

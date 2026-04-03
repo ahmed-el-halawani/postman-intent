@@ -34,6 +34,8 @@ interface TabState {
 
   // Per-tab operations
   sendRequest: () => Promise<void>;
+  setActiveTabResponse: (response: JsonRpcResponse, responseTime: number) => void;
+  setActiveTabSending: (isSending: boolean) => void;
   cancelWaiting: () => void;
 
   // Save
@@ -307,6 +309,43 @@ export const useTabStore = create<TabState>((set, get) => ({
         },
         ...state.history,
       ].slice(0, 500),
+    }));
+  },
+
+  setActiveTabResponse: (response, responseTime) => {
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === state.activeTabId
+          ? { ...t, response, responseTime, isSending: false }
+          : t
+      ),
+    }));
+
+    // Add to history
+    const tab = get().getActiveTab();
+    if (tab) {
+      set((state) => ({
+        history: [
+          {
+            id: uuidv4(),
+            timestamp: Date.now(),
+            request: { ...tab.request },
+            response,
+            responseTime,
+          },
+          ...state.history,
+        ].slice(0, 500),
+      }));
+    }
+  },
+
+  setActiveTabSending: (isSending) => {
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === state.activeTabId
+          ? { ...t, isSending, ...(isSending ? { response: null, responseTime: null } : {}) }
+          : t
+      ),
     }));
   },
 

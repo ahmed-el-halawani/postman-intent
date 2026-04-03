@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useServiceStore } from '../../store/serviceStore';
+import { useTabStore } from '../../store/tabStore';
 import { useDeviceStore } from '../../store/deviceStore';
 import { colors, monoInput, label, accentButton, ghostButton } from '../../styles';
+import ExtrasEditor from './ExtrasEditor';
 
 type ServiceAction = 'start' | 'stop' | 'bind';
 
@@ -9,14 +11,16 @@ export default function ServiceBuilder() {
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
 
+  // Read from tab request (shared with save/quickActions)
+  const tab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const updateRequest = useTabStore((s) => s.updateRequest);
+  const setActiveTabResponse = useTabStore((s) => s.setActiveTabResponse);
+  const setActiveTabSending = useTabStore((s) => s.setActiveTabSending);
+  const request = tab?.request;
+
   const {
     bindings,
     messages,
-    isOperating,
-    lastResponse,
-    lastResponseTime,
-    startService,
-    stopService,
     bindService,
     unbindService,
     callMethod,
@@ -24,10 +28,9 @@ export default function ServiceBuilder() {
     clearMessages,
   } = useServiceStore();
 
-  // Service form
+  // UI mode — not saved with request
   const [serviceAction, setServiceAction] = useState<ServiceAction>('start');
-  const [component, setComponent] = useState('');
-  const [intentAction, setIntentAction] = useState('');
+  const [isOperating, setIsOperating] = useState(false);
 
   // Method call form
   const [selectedBinding, setSelectedBinding] = useState('');
@@ -41,22 +44,54 @@ export default function ServiceBuilder() {
   const [msgArg2, setMsgArg2] = useState('0');
 
   const handleServiceOp = async () => {
-    if (!component) return;
-    switch (serviceAction) {
-      case 'start':
-        await startService(component, intentAction || undefined);
-        break;
-      case 'stop':
-        await stopService(component, intentAction || undefined);
-        break;
-      case 'bind':
-        await bindService(component);
-        break;
+    if (!request?.component) return;
+    setIsOperating(true);
+    setActiveTabSending(true);
+
+    const params: Record<string, unknown> = { component: request.component };
+    if (request.action) params.action = request.action;
+    if (request.data) params.data = request.data;
+    if (request.extras.length > 0) {
+      params.extras = request.extras
+        .filter((e) => e.key)
+        .map((e) => ({ key: e.key, type: e.type, value: e.value }));
     }
+
+    let method = 'service.start';
+    if (serviceAction === 'stop') method = 'service.stop';
+    if (serviceAction === 'bind') method = 'service.bind';
+
+    const start = performance.now();
+    const response = await window.intentPostman.sendCommand(method, params);
+    const elapsed = Math.round(performance.now() - start);
+
+    // For bind, track the binding in serviceStore
+    if (serviceAction === 'bind' && response.result && typeof response.result === 'object') {
+      const result = response.result as Record<string, unknown>;
+      useServiceStore.getState().bindings;
+      // Add to bindings if not already there
+      useServiceStore.setState((state) => ({
+        bindings: [
+          ...state.bindings.filter((b) => b.bindingId !== result.bindingId),
+          {
+            bindingId: result.bindingId as string,
+            component: request.component,
+            connected: false,
+            binderClass: 'pending',
+          },
+        ],
+      }));
+    }
+
+    setIsOperating(false);
+    setActiveTabResponse(response, elapsed);
   };
 
   const handleCallMethod = async () => {
     if (!selectedBinding || !methodName) return;
+    setIsOperating(true);
+    setActiveTabSending(true);
+
     let args: unknown[] | undefined;
     if (methodArgs.trim()) {
       try {
@@ -65,20 +100,53 @@ export default function ServiceBuilder() {
         args = [methodArgs];
       }
     }
-    await callMethod(selectedBinding, methodName, args);
+
+    const params: Record<string, unknown> = { bindingId: selectedBinding, method: methodName };
+    if (args) params.args = args;
+
+    const start = performance.now();
+    const response = await window.intentPostman.sendCommand('service.call', params);
+    const elapsed = Math.round(performance.now() - start);
+
+    setIsOperating(false);
+    setActiveTabResponse(response, elapsed);
+
+    // Also log to service messages
+    useServiceStore.getState().addMessage({
+      type: 'call_result',
+      bindingId: selectedBinding,
+      timestamp: Date.now(),
+      data: {
+        method: methodName,
+        result: response.result,
+        error: response.error,
+      },
+    });
   };
 
   const handleSendMessage = async () => {
     if (!msgBinding) return;
-    await sendMessage(
-      msgBinding,
-      parseInt(msgWhat) || 0,
-      parseInt(msgArg1) || 0,
-      parseInt(msgArg2) || 0,
-    );
+    setIsOperating(true);
+    setActiveTabSending(true);
+
+    const params: Record<string, unknown> = {
+      bindingId: msgBinding,
+      what: parseInt(msgWhat) || 0,
+    };
+    if (parseInt(msgArg1)) params.arg1 = parseInt(msgArg1);
+    if (parseInt(msgArg2)) params.arg2 = parseInt(msgArg2);
+
+    const start = performance.now();
+    const response = await window.intentPostman.sendCommand('service.sendMessage', params);
+    const elapsed = Math.round(performance.now() - start);
+
+    setIsOperating(false);
+    setActiveTabResponse(response, elapsed);
   };
 
   const connectedBindings = bindings.filter((b) => b.connected);
+
+  if (!request) return null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -117,8 +185,8 @@ export default function ServiceBuilder() {
             <div style={label}>Component *</div>
             <input
               style={monoInput}
-              value={component}
-              onChange={(e) => setComponent(e.target.value)}
+              value={request.component}
+              onChange={(e) => updateRequest({ component: e.target.value })}
               placeholder="com.example.app/.MyService"
             />
           </div>
@@ -128,23 +196,39 @@ export default function ServiceBuilder() {
               <div style={label}>Action (optional)</div>
               <input
                 style={monoInput}
-                value={intentAction}
-                onChange={(e) => setIntentAction(e.target.value)}
+                value={request.action}
+                onChange={(e) => updateRequest({ action: e.target.value })}
                 placeholder="com.example.action.START"
               />
             </div>
           )}
+
+          {/* Data URI */}
+          {serviceAction !== 'bind' && (
+            <div>
+              <div style={label}>Data URI (optional)</div>
+              <input
+                style={monoInput}
+                value={request.data}
+                onChange={(e) => updateRequest({ data: e.target.value })}
+                placeholder="content://... or custom URI"
+              />
+            </div>
+          )}
+
+          {/* Extras — for start/stop service intents */}
+          {serviceAction !== 'bind' && <ExtrasEditor />}
 
           <button
             style={{
               ...accentButton,
               background:
                 serviceAction === 'stop' ? colors.error : colors.intentService,
-              opacity: !component || isOperating || !isConnected ? 0.5 : 1,
+              opacity: !request.component || isOperating || !isConnected ? 0.5 : 1,
               marginTop: '4px',
             }}
             onClick={handleServiceOp}
-            disabled={!component || isOperating || !isConnected}
+            disabled={!request.component || isOperating || !isConnected}
           >
             {isOperating
               ? 'Processing...'
@@ -154,23 +238,6 @@ export default function ServiceBuilder() {
               ? 'Stop Service'
               : 'Bind to Service'}
           </button>
-
-          {lastResponse && (
-            <div
-              style={{
-                padding: '6px 8px',
-                background: colors.codeBg,
-                borderRadius: '3px',
-                fontSize: '11px',
-                fontFamily: 'monospace',
-                color: lastResponse.error ? colors.error : colors.success,
-              }}
-            >
-              {lastResponse.error
-                ? `Error: ${lastResponse.error.message}`
-                : `OK (${lastResponseTime}ms) - ${JSON.stringify(lastResponse.result)}`}
-            </div>
-          )}
         </div>
       </div>
 
@@ -248,25 +315,26 @@ export default function ServiceBuilder() {
                     </button>
                   </div>
 
-                  {/* Show discovered methods */}
+                  {/* Show discovered methods — click to auto-fill call form */}
                   {b.methods && b.methods.length > 0 && (
                     <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: `1px solid ${colors.border}` }}>
                       <div style={{ fontSize: '10px', color: colors.textMuted, marginBottom: '4px' }}>
-                        Methods:
+                        Methods — click to call:
                       </div>
-                      <div style={{ maxHeight: '100px', overflow: 'auto' }}>
+                      <div style={{ maxHeight: '120px', overflow: 'auto' }}>
                         {b.methods.map((m, i) => (
                           <div
                             key={i}
                             onClick={() => {
                               setSelectedBinding(b.bindingId);
                               setMethodName(m.name);
+                              setMethodArgs(m.paramTypes.length > 0 ? '' : '');
                             }}
                             style={{
                               fontSize: '11px',
                               fontFamily: 'monospace',
                               color: colors.text,
-                              padding: '2px 6px',
+                              padding: '3px 6px',
                               cursor: 'pointer',
                               borderRadius: '2px',
                             }}
@@ -335,13 +403,16 @@ export default function ServiceBuilder() {
               </div>
 
               <div>
-                <div style={label}>Arguments (comma-separated)</div>
+                <div style={label}>Arguments (comma-separated JSON values)</div>
                 <input
                   style={monoInput}
                   value={methodArgs}
                   onChange={(e) => setMethodArgs(e.target.value)}
                   placeholder='"hello", 42, true'
                 />
+                <span style={{ fontSize: '10px', color: colors.textMuted }}>
+                  e.g. "hello", 42, true — parsed as JSON array elements
+                </span>
               </div>
 
               <button

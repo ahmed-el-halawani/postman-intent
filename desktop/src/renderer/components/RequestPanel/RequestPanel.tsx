@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTabStore } from '../../store/tabStore';
 import { useDeviceStore } from '../../store/deviceStore';
 import { colors, accentButton, ghostButton, badge } from '../../styles';
 import type { IntentType } from '../../../shared/types';
+import { generateAdbCommand } from '../../../shared/adbCommand';
 import IntentBuilder from './IntentBuilder';
 import BroadcastBuilder from './BroadcastBuilder';
 import ServiceBuilder from './ServiceBuilder';
@@ -22,10 +23,20 @@ export default function RequestPanel() {
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
 
+  const [copied, setCopied] = useState(false);
+
   if (!tab) return null;
 
   const { request, isSending } = tab;
-  const showIntentSend = request.intentType === 'activity';
+  const isActivity = request.intentType === 'activity';
+
+  const handleCopyAdb = () => {
+    const cmd = generateAdbCommand(request);
+    navigator.clipboard.writeText(cmd).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <div
@@ -70,6 +81,21 @@ export default function RequestPanel() {
 
         <div style={{ flex: 1 }} />
 
+        {/* Copy ADB Command */}
+        <button
+          style={{
+            ...ghostButton,
+            fontSize: '11px',
+            padding: '4px 10px',
+            color: copied ? colors.success : undefined,
+            borderColor: copied ? colors.success : undefined,
+          }}
+          onClick={handleCopyAdb}
+          title="Copy equivalent adb shell am command"
+        >
+          {copied ? 'Copied!' : 'ADB'}
+        </button>
+
         {/* Save button */}
         <button
           style={{
@@ -83,32 +109,32 @@ export default function RequestPanel() {
           Save
         </button>
 
-        {showIntentSend && (
-          <>
-            <button
-              style={{
-                ...ghostButton,
-                fontSize: '11px',
-                padding: '4px 10px',
-              }}
-              onClick={resetRequest}
-            >
-              Clear
-            </button>
+        {/* Clear — all types */}
+        <button
+          style={{
+            ...ghostButton,
+            fontSize: '11px',
+            padding: '4px 10px',
+          }}
+          onClick={resetRequest}
+        >
+          Clear
+        </button>
 
-            <button
-              style={{
-                ...accentButton,
-                opacity: isSending || !isConnected ? 0.5 : 1,
-                padding: '5px 20px',
-                fontSize: '12px',
-              }}
-              onClick={sendRequest}
-              disabled={isSending || !isConnected}
-            >
-              {isSending ? 'Sending...' : 'Send'}
-            </button>
-          </>
+        {/* Send — only for activity (broadcast/service have their own send inside the builder) */}
+        {isActivity && (
+          <button
+            style={{
+              ...accentButton,
+              opacity: isSending || !isConnected ? 0.5 : 1,
+              padding: '5px 20px',
+              fontSize: '12px',
+            }}
+            onClick={sendRequest}
+            disabled={isSending || !isConnected}
+          >
+            {isSending ? 'Sending...' : 'Send'}
+          </button>
         )}
       </div>
 
