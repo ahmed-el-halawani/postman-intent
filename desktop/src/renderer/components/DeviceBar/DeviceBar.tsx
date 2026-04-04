@@ -28,6 +28,8 @@ export default function DeviceBar() {
       ? colors.success
       : connectionStatus === 'connecting'
       ? colors.warning
+      : connectionStatus === 'installing'
+      ? '#2196F3'
       : connectionStatus === 'error'
       ? colors.error
       : '#666';

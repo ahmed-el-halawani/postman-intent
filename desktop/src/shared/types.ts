@@ -33,7 +33,7 @@ export interface JsonRpcError {
 }
 
 // Connection status
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'installing' | 'connected' | 'error';
 
 // IPC API exposed to renderer via preload
 export interface IntentPostmanAPI {

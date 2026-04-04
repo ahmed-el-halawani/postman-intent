@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { listDevices, trackDevices, openTcpConnection, launchApp } from './adb';
+import { listDevices, trackDevices, openTcpConnection, launchApp, isAppInstalled, installApk } from './adb';
 import { CommandSocket } from './socket';
 import type { ConnectionStatus, CollectionsData } from '../shared/types';
 
@@ -65,6 +65,13 @@ ipcMain.handle('devices:list', async () => {
   }
 });
 
+function getApkPath(): string {
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    return path.join(process.cwd(), 'apk', 'app-debug.apk');
+  }
+  return path.join(process.resourcesPath, 'apk', 'app-debug.apk');
+}
+
 ipcMain.handle('devices:connect', async (_event, serial: string) => {
   try {
     setConnectionStatus('connecting');
@@ -74,19 +81,34 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
       commandSocket.disconnect();
     }
 
-    // Launch the Android app (always, no check)
-    await launchApp(serial);
-    await new Promise((r) => setTimeout(r, 2000));
+    // Check if the Android app is installed, install if missing
+    const installed = await isAppInstalled(serial);
+    if (!installed) {
+      const apkPath = getApkPath();
+      if (!fs.existsSync(apkPath)) {
+        return {
+          success: false,
+          error: 'Intent Postman app is not installed on the device and no APK was found. Please install the Android app manually.',
+        };
+      }
+      setConnectionStatus('installing');
+      await installApk(serial, apkPath);
+    }
 
-    // Open TCP connection with retry (server may still be starting)
+    // Launch the Android app
+    await launchApp(serial);
+
+    // Open TCP connection with retry every 5s for up to 2 minutes
+    const maxAttempts = installed ? 3 : 24; // 3×1s vs 24×5s
+    const retryDelay = installed ? 1000 : 5000;
     let stream: import('stream').Duplex | null = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
+        await new Promise((r) => setTimeout(r, attempt === 1 ? 2000 : retryDelay));
         stream = await openTcpConnection(serial, 5000);
         break;
       } catch (err) {
-        if (attempt === 3) throw err;
-        await new Promise((r) => setTimeout(r, 1000));
+        if (attempt === maxAttempts) throw err;
       }
     }
 
