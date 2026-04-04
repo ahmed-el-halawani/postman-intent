@@ -8,7 +8,9 @@
       "WebSearch",
       "mcp__plugin_claude-mem_mcp-search__search",
       "Edit(~/.claude/skills/memorize-project/**)",
-      "Edit(~/.claude/skills/recall-project/**)"
+      "Edit(~/.claude/skills/recall-project/**)",
+      "mcp__zai-mcp-server__analyze_image",
+      "mcp__zai-mcp-server__extract_text_from_screenshot"
     ],
     "additionalDirectories": [
       "C:\\Users\\pc\\.claude\\skills",
