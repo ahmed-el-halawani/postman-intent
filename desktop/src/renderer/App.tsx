@@ -12,11 +12,13 @@ import RequestPanel from './components/RequestPanel/RequestPanel';
 import ResponsePanel from './components/ResponsePanel/ResponsePanel';
 import TabBar from './components/TabBar/TabBar';
 import SaveToCollectionDialog from './components/Sidebar/SaveToCollectionDialog';
+import UnsavedChangesDialog from './components/TabBar/UnsavedChangesDialog';
 
 export default function App() {
   const { refreshDevices, setDevices, setConnectionStatus } = useDeviceStore();
   const addNotification = useNotificationStore((s) => s.addNotification);
   const showSaveDialog = useTabStore((s) => s.showSaveDialog);
+  const showUnsavedDialog = useTabStore((s) => s.showUnsavedDialog);
 
   useEffect(() => {
     refreshDevices();
@@ -78,7 +80,7 @@ export default function App() {
       if (e.ctrlKey && e.key === 'w') {
         e.preventDefault();
         const { activeTabId } = useTabStore.getState();
-        useTabStore.getState().closeTab(activeTabId);
+        useTabStore.getState().requestCloseTab(activeTabId);
       }
     };
 
@@ -134,6 +136,9 @@ export default function App() {
 
       {/* Save to collection dialog */}
       {showSaveDialog && <SaveToCollectionDialog />}
+
+      {/* Unsaved changes dialog */}
+      {showUnsavedDialog && <UnsavedChangesDialog />}
     </div>
   );
 }

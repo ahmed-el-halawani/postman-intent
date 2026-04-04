@@ -10,7 +10,7 @@ const TYPE_COLORS: Record<IntentType, string> = {
 };
 
 export default function TabBar() {
-  const { tabs, activeTabId, setActiveTab, createTab, closeTab, renameTab } = useTabStore();
+  const { tabs, activeTabId, setActiveTab, createTab, requestCloseTab, renameTab } = useTabStore();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -166,7 +166,7 @@ export default function TabBar() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  closeTab(tab.id);
+                  requestCloseTab(tab.id);
                 }}
                 style={{
                   background: 'transparent',

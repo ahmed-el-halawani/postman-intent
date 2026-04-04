@@ -43,6 +43,14 @@ interface TabState {
   showSaveDialog: boolean;
   setShowSaveDialog: (show: boolean) => void;
 
+  // Unsaved changes dialog
+  pendingCloseTabId: string | null;
+  showUnsavedDialog: boolean;
+  setShowUnsavedDialog: (show: boolean) => void;
+  requestCloseTab: (id: string) => void;
+  confirmDiscardClose: () => void;
+  saveAndCloseTab: () => void;
+
   // History
   clearHistory: () => void;
 
@@ -88,6 +96,8 @@ export const useTabStore = create<TabState>((set, get) => ({
   activeTabId: initialTab.id,
   history: [],
   showSaveDialog: false,
+  pendingCloseTabId: null,
+  showUnsavedDialog: false,
 
   createTab: (name, request, savedRef) => {
     const tab = createNewTab(name, request, savedRef);
@@ -369,6 +379,8 @@ export const useTabStore = create<TabState>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === id);
     if (!tab) return;
 
+    const wasPendingClose = get().pendingCloseTabId === id;
+
     if (tab.savedRequestRef) {
       // Update existing saved request in collection
       useCollectionsStore
@@ -379,13 +391,67 @@ export const useTabStore = create<TabState>((set, get) => ({
           t.id === id ? { ...t, isDirty: false } : t
         ),
       }));
+
+      // Auto-close if this was a pending close
+      if (wasPendingClose) {
+        get().closeTab(id);
+        set({ pendingCloseTabId: null, showUnsavedDialog: false });
+      }
     } else {
-      // Open save dialog
+      // Open save dialog — keep pendingCloseTabId so we can close after save
       set({ showSaveDialog: true });
     }
   },
 
-  setShowSaveDialog: (show) => set({ showSaveDialog: show }),
+  setShowSaveDialog: (show) => {
+    set({ showSaveDialog: show });
+    if (!show) {
+      const { pendingCloseTabId } = get();
+      if (pendingCloseTabId) {
+        const tab = get().tabs.find((t) => t.id === pendingCloseTabId);
+        if (tab && !tab.isDirty) {
+          // Save was successful — close the tab
+          get().closeTab(pendingCloseTabId);
+        }
+        // Either saved+closed or cancelled — clear pending state
+        set({ pendingCloseTabId: null, showUnsavedDialog: false });
+      }
+    }
+  },
+
+  // Unsaved changes dialog handlers
+  requestCloseTab: (id) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    if (tab?.isDirty) {
+      set({ pendingCloseTabId: id, showUnsavedDialog: true });
+    } else {
+      get().closeTab(id);
+    }
+  },
+
+  confirmDiscardClose: () => {
+    const { pendingCloseTabId } = get();
+    if (pendingCloseTabId) {
+      get().closeTab(pendingCloseTabId);
+    }
+    set({ pendingCloseTabId: null, showUnsavedDialog: false });
+  },
+
+  saveAndCloseTab: () => {
+    const { pendingCloseTabId } = get();
+    if (pendingCloseTabId) {
+      get().saveTab(pendingCloseTabId);
+      // If saveTab opened the save dialog (no savedRequestRef), pendingCloseTabId
+      // stays set so the tab closes after the user completes the save.
+      // If saveTab saved directly, it already closed the tab and cleared state.
+    }
+  },
+
+  setShowUnsavedDialog: (show) => {
+    if (!show) {
+      set({ pendingCloseTabId: null, showUnsavedDialog: false });
+    }
+  },
 
   clearHistory: () => set({ history: [] }),
 
