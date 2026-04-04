@@ -1,6 +1,9 @@
 module.exports = {
   packagerConfig: {
     asar: true,
+    extraResource: [
+      { from: '../apk/app-debug.apk', to: 'apk/app-debug.apk' },
+    ],
   },
   makers: [
     {
