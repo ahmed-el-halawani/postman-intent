@@ -33,12 +33,13 @@ export interface JsonRpcError {
 }
 
 // Connection status
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'installing' | 'connected' | 'error';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 // IPC API exposed to renderer via preload
 export interface IntentPostmanAPI {
   listDevices: () => Promise<Device[]>;
-  connectDevice: (serial: string) => Promise<{ success: boolean; error?: string }>;
+  connectDevice: (serial: string) => Promise<{ success: boolean; error?: string; needsInstall?: boolean }>;
+  installAndConnectDevice: (serial: string) => Promise<{ success: boolean; error?: string }>;
   disconnectDevice: () => Promise<void>;
   sendCommand: (method: string, params: Record<string, unknown>) => Promise<JsonRpcResponse>;
   loadCollections: () => Promise<CollectionsData>;

@@ -6,6 +6,8 @@ const api: IntentPostmanAPI = {
 
   connectDevice: (serial: string) => ipcRenderer.invoke('devices:connect', serial),
 
+  installAndConnectDevice: (serial: string) => ipcRenderer.invoke('devices:installAndConnect', serial),
+
   disconnectDevice: () => ipcRenderer.invoke('devices:disconnect'),
 
   sendCommand: (method: string, params: Record<string, unknown>) =>
