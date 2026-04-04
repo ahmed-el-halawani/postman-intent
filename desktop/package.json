@@ -12,7 +12,7 @@
     "forge": "./forge.config.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Ahmed El Halawani",
   "license": "ISC",
   "dependencies": {
     "adbkit": "^2.11.1",
