@@ -11,7 +11,8 @@
       "Edit(~/.claude/skills/recall-project/**)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\pc\\.claude\\skills"
+      "C:\\Users\\pc\\.claude\\skills",
+      "C:\\Users\\pc\\.claude"
     ]
   },
   "enabledPlugins": {
