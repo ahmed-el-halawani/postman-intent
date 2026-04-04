@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
-      "Read(//c/Users/pc/AppData/Roaming/intent-postman/aidl_build/**)"
+      "Read(//c/Users/pc/AppData/Roaming/intent-postman/aidl_build/**)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(ls \"c:/Users/pc/OneDrive/Desktop/ai apps/claude/postman intent/android/gradlew\"*)"
     ]
   }
 }
