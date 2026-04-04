@@ -111,12 +111,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Collect release artifacts
           APK="apk/app-debug.apk"
           EXE=$(find desktop/out/make -name "*.exe" -type f | head -n 1)
 
+          if [ -z "$EXE" ]; then
+            echo "ERROR: No .exe found in desktop/out/make"
+            ls -R desktop/out/make
+            exit 1
+          fi
+
           gh release create "${{ steps.version.outputs.tag }}" \
             "$APK" \
-            $EXE \
+            "$EXE" \
             --title "${{ steps.version.outputs.tag }}" \
             --generate-notes
