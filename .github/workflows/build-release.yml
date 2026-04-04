@@ -55,9 +55,11 @@ jobs:
           restore-keys: gradle-
 
       - name: Build APK
+        shell: bash
         run: cd android && ./gradlew assembleDebug
 
       - name: Copy APK for bundling
+        shell: bash
         run: |
           mkdir -p apk
           cp android/app/build/outputs/apk/debug/app-debug.apk apk/app-debug.apk
