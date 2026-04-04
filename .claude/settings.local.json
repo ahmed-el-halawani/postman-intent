@@ -1,12 +1,21 @@
 {
-  "defaultMode": "bypassPermissions",
   "permissions": {
     "allow": [
       "Bash",
       "Edit",
       "Read",
       "WebFetch",
-      "WebSearch"
+      "WebSearch",
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "Edit(~/.claude/skills/memorize-project/**)",
+      "Edit(~/.claude/skills/recall-project/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\pc\\.claude\\skills"
     ]
-  }
+  },
+  "enabledPlugins": {
+    "claude-mem@thedotmack": true
+  },
+  "defaultMode": "bypassPermissions"
 }
