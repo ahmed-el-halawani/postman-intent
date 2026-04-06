@@ -1,4 +1,6 @@
 {
+
+ 
   "permissions": {
     "allow": [
       "Bash",
@@ -21,4 +23,6 @@
     "claude-mem@thedotmack": true
   },
   "defaultMode": "bypassPermissions"
+
+
 }
