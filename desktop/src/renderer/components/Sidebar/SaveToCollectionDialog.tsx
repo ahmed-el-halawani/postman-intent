@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useCollectionsStore } from '../../store/collectionsStore';
 import { useTabStore } from '../../store/tabStore';
-import { colors, monoInput, accentButton, ghostButton, label } from '../../styles';
+import { useColors, useStyles } from '../../styles';
 
 export default function SaveToCollectionDialog() {
+  const colors = useColors();
+  const { monoInput, accentButton, ghostButton, label } = useStyles();
   const { collections, createCollection, addRequest } = useCollectionsStore();
   const { getActiveTab, setShowSaveDialog, tabs, activeTabId } = useTabStore();
 

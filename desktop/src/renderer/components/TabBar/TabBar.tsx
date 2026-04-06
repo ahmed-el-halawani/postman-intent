@@ -1,16 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabStore } from '../../store/tabStore';
-import { colors } from '../../styles';
+import { useColors } from '../../styles';
 import type { IntentType } from '../../../shared/types';
 
-const TYPE_COLORS: Record<IntentType, string> = {
-  activity: colors.intentActivity,
-  broadcast: colors.intentBroadcast,
-  service: colors.intentService,
+const TYPE_ABBREV: Record<IntentType, string> = {
+  activity: 'ACT',
+  broadcast: 'BRO',
+  service: 'SVC',
 };
 
 export default function TabBar() {
   const { tabs, activeTabId, setActiveTab, createTab, requestCloseTab, renameTab } = useTabStore();
+  const colors = useColors();
+  const TYPE_COLORS: Record<IntentType, string> = {
+    activity: colors.intentActivity,
+    broadcast: colors.intentBroadcast,
+    service: colors.intentService,
+  };
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -39,11 +45,12 @@ export default function TabBar() {
       style={{
         display: 'flex',
         alignItems: 'stretch',
-        background: colors.bg,
+        background: colors.surfaceLight,
         borderBottom: `1px solid ${colors.border}`,
-        height: '34px',
+        height: '36px',
         overflow: 'hidden',
         position: 'relative',
+        paddingLeft: '8px',
       }}
     >
       {/* Scrollable tab area */}
@@ -55,12 +62,14 @@ export default function TabBar() {
           overflowX: 'auto',
           overflowY: 'hidden',
           scrollbarWidth: 'none',
+          gap: '1px',
         }}
       >
-        <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+        <style>{`.tab-scroll::-webkit-scrollbar { display: none; }`}</style>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const typeColor = TYPE_COLORS[tab.request.intentType];
+          const typeAbbrev = TYPE_ABBREV[tab.request.intentType];
           const isRenaming = renamingId === tab.id;
 
           return (
@@ -70,18 +79,19 @@ export default function TabBar() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '0 12px',
-                minWidth: '100px',
-                maxWidth: '200px',
+                gap: '12px',
+                padding: '0 16px',
+                minWidth: '120px',
+                maxWidth: '280px',
                 cursor: 'pointer',
                 background: isActive ? colors.surface : 'transparent',
-                borderRight: `1px solid ${colors.border}`,
                 borderTop: isActive
-                  ? `2px solid ${typeColor}`
+                  ? `2px solid ${colors.accentOrange}`
                   : '2px solid transparent',
+                borderRight: isActive ? 'none' : `1px solid ${colors.border}30`,
                 transition: 'background 0.1s',
                 flexShrink: 0,
+                paddingTop: isActive ? '0' : '2px',
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
@@ -94,16 +104,18 @@ export default function TabBar() {
                 }
               }}
             >
-              {/* Type dot */}
+              {/* Type abbreviation badge */}
               <span
                 style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: typeColor,
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  color: typeColor,
                   flexShrink: 0,
+                  letterSpacing: '0.3px',
                 }}
-              />
+              >
+                {typeAbbrev}
+              </span>
 
               {/* Tab name — editable on double-click */}
               {isRenaming ? (
@@ -121,12 +133,13 @@ export default function TabBar() {
                     flex: 1,
                     minWidth: 0,
                     padding: '1px 4px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     color: colors.text,
-                    background: colors.bg,
-                    border: `1px solid ${colors.accent}`,
+                    background: colors.surfaceLight,
+                    border: `1px solid ${colors.accentOrange}`,
                     borderRadius: '2px',
                     outline: 'none',
+                    fontFamily: "'Inter', sans-serif",
                   }}
                 />
               ) : (
@@ -136,8 +149,9 @@ export default function TabBar() {
                     handleStartRename(tab.id, tab.name);
                   }}
                   style={{
-                    fontSize: '11px',
-                    color: isActive ? colors.text : colors.textDim,
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: isActive ? colors.textSecondary : colors.textDim,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -155,8 +169,8 @@ export default function TabBar() {
                     width: '6px',
                     height: '6px',
                     borderRadius: '50%',
-                    background: colors.white,
-                    opacity: 0.5,
+                    background: colors.textMuted,
+                    opacity: 0.6,
                     flexShrink: 0,
                   }}
                 />
@@ -173,22 +187,27 @@ export default function TabBar() {
                   border: 'none',
                   color: colors.textMuted,
                   cursor: 'pointer',
-                  fontSize: '14px',
+                  fontSize: '12px',
                   padding: '0 2px',
                   lineHeight: 1,
                   flexShrink: 0,
                   borderRadius: '3px',
+                  width: '16px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 onMouseEnter={(e) => {
                   (e.target as HTMLElement).style.color = colors.error;
-                  (e.target as HTMLElement).style.background = colors.error + '20';
+                  (e.target as HTMLElement).style.background = colors.error + '15';
                 }}
                 onMouseLeave={(e) => {
                   (e.target as HTMLElement).style.color = colors.textMuted;
                   (e.target as HTMLElement).style.background = 'transparent';
                 }}
               >
-                x
+                ×
               </button>
             </div>
           );
@@ -199,11 +218,10 @@ export default function TabBar() {
       <button
         onClick={() => createTab()}
         style={{
-          background: colors.surface,
+          background: 'transparent',
           border: 'none',
           borderLeft: `1px solid ${colors.border}`,
-          borderBottom: `1px solid ${colors.border}`,
-          color: colors.textDim,
+          color: colors.textMuted,
           cursor: 'pointer',
           fontSize: '16px',
           padding: '0 12px',
@@ -217,7 +235,7 @@ export default function TabBar() {
           (e.target as HTMLElement).style.color = colors.text;
         }}
         onMouseLeave={(e) => {
-          (e.target as HTMLElement).style.color = colors.textDim;
+          (e.target as HTMLElement).style.color = colors.textMuted;
         }}
         title="New Tab (Ctrl+N)"
       >

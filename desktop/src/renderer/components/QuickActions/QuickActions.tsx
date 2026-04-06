@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDeviceStore } from '../../store/deviceStore';
 import { useTabStore } from '../../store/tabStore';
-import { colors, input, label, badge } from '../../styles';
+import { useColors, useStyles } from '../../styles';
 import type { IntentType } from '../../../shared/types';
 
 interface QuickAction {
@@ -16,13 +16,14 @@ interface QuickAction {
   extras?: { key: string; type: string; value: string }[];
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  activity: colors.intentActivity,
-  broadcast: colors.intentBroadcast,
-  service: colors.intentService,
-};
-
 export default function QuickActions() {
+  const colors = useColors();
+  const { sidebarInput } = useStyles();
+  const TYPE_COLORS: Record<string, string> = {
+    activity: colors.intentActivity,
+    broadcast: colors.intentBroadcast,
+    service: colors.intentService,
+  };
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
   const [filter, setFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'common' | 'device'>('all');
@@ -89,7 +90,7 @@ export default function QuickActions() {
   if (!isConnected) {
     return (
       <div style={{ padding: '12px', textAlign: 'center' }}>
-        <span style={{ fontSize: '12px', color: colors.textMuted }}>
+        <span style={{ fontSize: '12px', color: colors.sidebarTextDim }}>
           Connect to a device to see quick actions
         </span>
       </div>
@@ -101,22 +102,31 @@ export default function QuickActions() {
       {/* Header */}
       <div
         style={{
-          padding: '8px 10px',
-          borderBottom: `1px solid ${colors.border}`,
+          padding: '8px 12px',
+          borderBottom: `1px solid ${colors.sidebarBorder}`,
           display: 'flex',
           flexDirection: 'column',
           gap: '6px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ ...label, margin: 0, flex: 1 }}>Quick Actions</span>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            color: colors.sidebarTextDim,
+            textTransform: 'uppercase',
+            letterSpacing: '1.1px',
+            flex: 1,
+          }}>
+            Quick Actions
+          </span>
           <button
             onClick={fetchQuickActions}
             disabled={loading}
             style={{
               background: 'transparent',
-              border: `1px solid ${colors.border}`,
-              color: colors.textDim,
+              border: `1px solid ${colors.sidebarBorder}`,
+              color: colors.sidebarTextDim,
               fontSize: '10px',
               padding: '2px 8px',
               borderRadius: '3px',
@@ -128,7 +138,7 @@ export default function QuickActions() {
         </div>
 
         <input
-          style={{ ...input, fontSize: '11px', padding: '5px 8px' }}
+          style={{ ...sidebarInput, fontSize: '12px', padding: '6px 10px' }}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Search actions..."
@@ -143,10 +153,10 @@ export default function QuickActions() {
                 flex: 1,
                 padding: '3px',
                 fontSize: '10px',
-                border: `1px solid ${sourceFilter === s ? colors.accent : colors.border}`,
+                border: `1px solid ${sourceFilter === s ? colors.accentOrange : colors.sidebarBorder}`,
                 borderRadius: '3px',
-                background: sourceFilter === s ? colors.accent + '22' : 'transparent',
-                color: sourceFilter === s ? colors.accent : colors.textDim,
+                background: sourceFilter === s ? colors.accentOrange + '22' : 'transparent',
+                color: sourceFilter === s ? colors.accentOrange : colors.sidebarTextDim,
                 cursor: 'pointer',
                 textTransform: 'capitalize',
               }}
@@ -161,7 +171,7 @@ export default function QuickActions() {
       <div style={{ flex: 1, overflow: 'auto' }}>
         {filtered.length === 0 && (
           <div style={{ padding: '12px', textAlign: 'center' }}>
-            <span style={{ fontSize: '11px', color: colors.textMuted }}>
+            <span style={{ fontSize: '11px', color: colors.sidebarTextDim }}>
               {loading ? 'Loading...' : 'No matching actions'}
             </span>
           </div>
@@ -172,13 +182,13 @@ export default function QuickActions() {
             key={`${action.action}-${action.component}-${i}`}
             onClick={() => applyAction(action)}
             style={{
-              padding: '7px 10px',
-              borderBottom: `1px solid ${colors.border}`,
+              padding: '7px 12px',
+              borderBottom: `1px solid ${colors.sidebarBorder}`,
               cursor: 'pointer',
               transition: 'background 0.1s',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = colors.bg;
+              (e.currentTarget as HTMLElement).style.background = colors.sidebarActive;
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -187,17 +197,20 @@ export default function QuickActions() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span
                 style={{
-                  ...badge(TYPE_COLORS[action.type] || colors.textDim),
-                  fontSize: '8px',
-                  padding: '1px 5px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  color: TYPE_COLORS[action.type] || colors.sidebarTextDim,
+                  letterSpacing: '0.3px',
+                  width: '28px',
+                  flexShrink: 0,
                 }}
               >
-                {action.type.slice(0, 3)}
+                {action.type.slice(0, 3).toUpperCase()}
               </span>
               <span
                 style={{
-                  fontSize: '11px',
-                  color: colors.text,
+                  fontSize: '12px',
+                  color: colors.sidebarText,
                   flex: 1,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -222,7 +235,7 @@ export default function QuickActions() {
               <span
                 style={{
                   fontSize: '8px',
-                  color: action.source === 'common' ? colors.accentDark : colors.textMuted,
+                  color: colors.sidebarTextDim,
                   opacity: 0.7,
                 }}
               >
@@ -232,8 +245,8 @@ export default function QuickActions() {
             <div
               style={{
                 fontSize: '10px',
-                color: colors.textMuted,
-                fontFamily: 'monospace',
+                color: colors.sidebarTextDim,
+                fontFamily: "'Consolas', 'Courier New', monospace",
                 marginTop: '2px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',

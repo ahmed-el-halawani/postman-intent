@@ -1,8 +1,10 @@
 import React from 'react';
 import { useTabStore } from '../../store/tabStore';
-import { colors, accentButton, ghostButton } from '../../styles';
+import { useColors, useStyles } from '../../styles';
 
 export default function UnsavedChangesDialog() {
+  const colors = useColors();
+  const { accentButton, ghostButton } = useStyles();
   const { confirmDiscardClose, saveAndCloseTab, setShowUnsavedDialog } = useTabStore();
 
   return (

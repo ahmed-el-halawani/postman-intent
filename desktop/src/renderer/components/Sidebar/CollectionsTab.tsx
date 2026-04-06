@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useCollectionsStore } from '../../store/collectionsStore';
 import { useTabStore } from '../../store/tabStore';
-import { colors, ghostButton, label, badge } from '../../styles';
+import { useColors, useStyles } from '../../styles';
 import type { IntentType } from '../../../shared/types';
 import ContextMenu, { type ContextMenuEntry } from '../ContextMenu/ContextMenu';
 
-const TYPE_COLORS: Record<IntentType, string> = {
-  activity: colors.intentActivity,
-  broadcast: colors.intentBroadcast,
-  service: colors.intentService,
+const TYPE_ABBREV: Record<IntentType, string> = {
+  activity: 'ACT',
+  broadcast: 'BRO',
+  service: 'SVC',
 };
 
 interface MenuState {
@@ -27,6 +27,13 @@ interface MoveDialogState {
 }
 
 export default function CollectionsTab() {
+  const colors = useColors();
+  const { sidebarInput } = useStyles();
+  const TYPE_COLORS: Record<IntentType, string> = {
+    activity: colors.intentActivity,
+    broadcast: colors.intentBroadcast,
+    service: colors.intentService,
+  };
   const {
     collections,
     expandedIds,
@@ -62,6 +69,7 @@ export default function CollectionsTab() {
   const [renamingResponseCollectionId, setRenamingResponseCollectionId] = useState<string | null>(null);
   const [renamingResponseRequestId, setRenamingResponseRequestId] = useState<string | null>(null);
   const [renameResponseValue, setRenameResponseValue] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -271,18 +279,24 @@ export default function CollectionsTab() {
     ];
   };
 
+  // Filter collections/requests by search
+  const filteredCollections = searchFilter
+    ? collections.filter((c) => {
+        const q = searchFilter.toLowerCase();
+        if (c.name.toLowerCase().includes(q)) return true;
+        return c.requests.some(
+          (r) =>
+            r.name.toLowerCase().includes(q) ||
+            r.request.action.toLowerCase().includes(q) ||
+            r.request.component.toLowerCase().includes(q)
+        );
+      })
+    : collections;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
-      <div
-        style={{
-          padding: '8px 10px',
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        <span style={{ ...label, margin: 0, flex: 1 }}>Collections</span>
+      {/* Search input */}
+      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.sidebarBorder}` }}>
         <input
           ref={fileInputRef}
           type="file"
@@ -290,43 +304,27 @@ export default function CollectionsTab() {
           style={{ display: 'none' }}
           onChange={handleImport}
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
+        <input
           style={{
-            ...ghostButton,
-            fontSize: '11px',
-            padding: '2px 8px',
+            ...sidebarInput,
+            fontSize: '12px',
+            padding: '6px 10px',
           }}
-          title="Import collection from JSON"
-        >
-          Import
-        </button>
-        <button
-          onClick={() => setIsCreating(true)}
-          style={{
-            ...ghostButton,
-            fontSize: '11px',
-            padding: '2px 8px',
-          }}
-        >
-          + New
-        </button>
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder="Search collections..."
+        />
       </div>
 
       {/* New collection input */}
       {isCreating && (
-        <div style={{ padding: '6px 10px', borderBottom: `1px solid ${colors.border}` }}>
+        <div style={{ padding: '6px 12px', borderBottom: `1px solid ${colors.sidebarBorder}` }}>
           <input
             autoFocus
             style={{
-              width: '100%',
-              padding: '5px 8px',
-              background: colors.bg,
-              color: colors.text,
-              border: `1px solid ${colors.accent}`,
-              borderRadius: '3px',
-              fontSize: '11px',
-              outline: 'none',
+              ...sidebarInput,
+              fontSize: '12px',
+              border: `1px solid ${colors.accentOrange}`,
             }}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -345,15 +343,15 @@ export default function CollectionsTab() {
 
       {/* Collection tree */}
       <div style={{ flex: 1, overflow: 'auto' }}>
-        {collections.length === 0 && !isCreating && (
+        {filteredCollections.length === 0 && !isCreating && (
           <div style={{ padding: '16px', textAlign: 'center' }}>
-            <span style={{ fontSize: '12px', color: colors.textMuted }}>
-              No collections yet. Click "+ New" to create one.
+            <span style={{ fontSize: '12px', color: colors.sidebarTextDim }}>
+              {searchFilter ? 'No matching collections' : 'No collections yet. Click "New" to create one.'}
             </span>
           </div>
         )}
 
-        {collections.map((collection) => {
+        {filteredCollections.map((collection) => {
           const isExpanded = expandedIds.has(collection.id);
           const isRenaming = renamingId === collection.id;
 
@@ -365,14 +363,15 @@ export default function CollectionsTab() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '6px 10px',
-                  borderBottom: `1px solid ${colors.border}`,
+                  padding: '8px 12px',
+                  borderBottom: `1px solid ${colors.sidebarBorder}`,
                   cursor: 'pointer',
+                  transition: 'background 0.1s',
                 }}
                 onClick={() => toggleExpanded(collection.id)}
                 onContextMenu={(e) => handleCollectionContextMenu(e, collection.id)}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = colors.bg;
+                  (e.currentTarget as HTMLElement).style.background = colors.sidebarActive;
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -382,7 +381,7 @@ export default function CollectionsTab() {
                 <span
                   style={{
                     fontSize: '10px',
-                    color: colors.textDim,
+                    color: colors.sidebarTextDim,
                     transition: 'transform 0.15s',
                     transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
                     display: 'inline-block',
@@ -393,6 +392,13 @@ export default function CollectionsTab() {
                   ▶
                 </span>
 
+                {/* Collection icon */}
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke={colors.sidebarTextDim} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="12" height="9" rx="1" />
+                  <path d="M1 6h12" />
+                  <path d="M4 3V1.5h6V3" />
+                </svg>
+
                 {/* Name (editable) */}
                 {isRenaming ? (
                   <input
@@ -400,11 +406,11 @@ export default function CollectionsTab() {
                     style={{
                       flex: 1,
                       padding: '2px 4px',
-                      background: colors.bg,
-                      color: colors.text,
-                      border: `1px solid ${colors.accent}`,
+                      background: colors.sidebarSurface,
+                      color: colors.sidebarText,
+                      border: `1px solid ${colors.accentOrange}`,
                       borderRadius: '2px',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       outline: 'none',
                     }}
                     value={renameValue}
@@ -419,8 +425,8 @@ export default function CollectionsTab() {
                 ) : (
                   <span
                     style={{
-                      fontSize: '11px',
-                      color: colors.text,
+                      fontSize: '12px',
+                      color: colors.sidebarText,
                       fontWeight: 600,
                       flex: 1,
                       overflow: 'hidden',
@@ -440,10 +446,10 @@ export default function CollectionsTab() {
                 {/* Count badge */}
                 <span
                   style={{
-                    fontSize: '9px',
-                    color: colors.textMuted,
-                    background: colors.bg,
-                    padding: '0 5px',
+                    fontSize: '10px',
+                    color: colors.sidebarTextDim,
+                    background: colors.sidebarSurface,
+                    padding: '0 6px',
                     borderRadius: '8px',
                   }}
                 >
@@ -453,10 +459,10 @@ export default function CollectionsTab() {
 
               {/* Requests list */}
               {isExpanded && (
-                <div style={{ background: colors.bg + '40' }}>
+                <div>
                   {collection.requests.length === 0 && (
-                    <div style={{ padding: '8px 10px 8px 28px' }}>
-                      <span style={{ fontSize: '10px', color: colors.textMuted, fontStyle: 'italic' }}>
+                    <div style={{ padding: '8px 12px 8px 42px' }}>
+                      <span style={{ fontSize: '11px', color: colors.sidebarTextDim, fontStyle: 'italic' }}>
                         Empty — right-click to add a request
                       </span>
                     </div>
@@ -477,27 +483,33 @@ export default function CollectionsTab() {
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
-                          padding: '5px 10px 5px 28px',
-                          borderBottom: `1px solid ${colors.border}`,
+                          padding: '6px 12px 6px 42px',
+                          borderBottom: `1px solid ${colors.sidebarBorder}`,
                           cursor: 'pointer',
                           transition: 'background 0.1s',
+                          borderLeft: '2px solid transparent',
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = colors.bg;
+                          (e.currentTarget as HTMLElement).style.background = colors.sidebarActive;
+                          (e.currentTarget as HTMLElement).style.borderLeftColor = colors.accentOrange;
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLElement).style.background = 'transparent';
+                          (e.currentTarget as HTMLElement).style.borderLeftColor = 'transparent';
                         }}
                       >
-                        {/* Type badge */}
+                        {/* Type badge — text only */}
                         <span
                           style={{
-                            ...badge(TYPE_COLORS[req.request.intentType]),
-                            fontSize: '8px',
-                            padding: '1px 5px',
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            color: TYPE_COLORS[req.request.intentType],
+                            letterSpacing: '0.3px',
+                            width: '28px',
+                            flexShrink: 0,
                           }}
                         >
-                          {req.request.intentType.slice(0, 3)}
+                          {TYPE_ABBREV[req.request.intentType]}
                         </span>
 
                         {/* Request name */}
@@ -507,11 +519,11 @@ export default function CollectionsTab() {
                             style={{
                               flex: 1,
                               padding: '1px 4px',
-                              background: colors.bg,
-                              color: colors.text,
-                              border: `1px solid ${colors.accent}`,
+                              background: colors.sidebarSurface,
+                              color: colors.sidebarText,
+                              border: `1px solid ${colors.accentOrange}`,
                               borderRadius: '2px',
-                              fontSize: '11px',
+                              fontSize: '12px',
                               outline: 'none',
                             }}
                             value={renameRequestValue}
@@ -529,8 +541,8 @@ export default function CollectionsTab() {
                         ) : (
                           <span
                             style={{
-                              fontSize: '11px',
-                              color: colors.text,
+                              fontSize: '12px',
+                              color: colors.sidebarText,
                               flex: 1,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -583,7 +595,7 @@ export default function CollectionsTab() {
 
                       {/* Expanded saved responses sub-items */}
                       {expandedRequestIds.has(req.id) && req.savedResponses && req.savedResponses.length > 0 && (
-                        <div style={{ background: colors.bg + '60' }}>
+                        <div>
                           {req.savedResponses.map((sr) => {
                             const isRenamingSr =
                               renamingResponseId === sr.id &&
@@ -599,15 +611,15 @@ export default function CollectionsTab() {
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: '8px',
-                                  padding: '7px 10px 7px 44px',
-                                  borderBottom: `1px solid ${colors.border}`,
+                                  padding: '7px 12px 7px 56px',
+                                  borderBottom: `1px solid ${colors.sidebarBorder}`,
                                   fontSize: '11px',
-                                  color: colors.textDim,
+                                  color: colors.sidebarTextDim,
                                   cursor: 'pointer',
                                   transition: 'background 0.1s',
                                 }}
                                 onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLElement).style.background = colors.bg;
+                                  (e.currentTarget as HTMLElement).style.background = colors.sidebarActive;
                                 }}
                                 onMouseLeave={(e) => {
                                   (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -631,9 +643,9 @@ export default function CollectionsTab() {
                                     style={{
                                       flex: 1,
                                       padding: '2px 4px',
-                                      background: colors.bg,
-                                      color: colors.text,
-                                      border: `1px solid ${colors.accent}`,
+                                      background: colors.sidebarSurface,
+                                      color: colors.sidebarText,
+                                      border: `1px solid ${colors.accentOrange}`,
                                       borderRadius: '2px',
                                       fontSize: '11px',
                                       outline: 'none',
@@ -658,7 +670,7 @@ export default function CollectionsTab() {
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
-                                      color: colors.text,
+                                      color: colors.sidebarText,
                                     }}
                                     onDoubleClick={(e) => {
                                       e.stopPropagation();
@@ -692,7 +704,7 @@ export default function CollectionsTab() {
 
                                 {/* Time */}
                                 {sr.responseTime != null && (
-                                  <span style={{ fontSize: '10px', color: colors.textMuted }}>
+                                  <span style={{ fontSize: '10px', color: colors.sidebarTextDim }}>
                                     {sr.responseTime}ms
                                   </span>
                                 )}
@@ -761,6 +773,7 @@ function MoveToCollectionDialog({
   onMove: (toCollectionId: string) => void;
   onClose: () => void;
 }) {
+  const colors = useColors();
   const otherCollections = collections.filter((c) => c.id !== fromCollectionId);
   const [selected, setSelected] = useState(otherCollections[0]?.id || '');
 
@@ -769,7 +782,7 @@ function MoveToCollectionDialog({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'rgba(0,0,0,0.4)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -785,6 +798,7 @@ function MoveToCollectionDialog({
           borderRadius: '8px',
           padding: '20px',
           width: '320px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
         }}
       >
         <div style={{ fontSize: '14px', fontWeight: 700, color: colors.text, marginBottom: '12px' }}>
@@ -799,7 +813,7 @@ function MoveToCollectionDialog({
             style={{
               width: '100%',
               padding: '7px 10px',
-              background: colors.bg,
+              background: colors.surface,
               color: colors.text,
               border: `1px solid ${colors.border}`,
               borderRadius: '4px',

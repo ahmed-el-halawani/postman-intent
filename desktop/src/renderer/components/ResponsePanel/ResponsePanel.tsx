@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTabStore } from '../../store/tabStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useCollectionsStore } from '../../store/collectionsStore';
-import { colors, label, ghostButton } from '../../styles';
+import { useColors, useStyles } from '../../styles';
 import { useDeviceStore } from '../../store/deviceStore';
 import type { SavedResponse, JsonRpcResponse } from '../../../shared/types';
 
@@ -26,6 +26,8 @@ export default function ResponsePanel() {
   const deleteResponse = useCollectionsStore((s) => s.deleteResponse);
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
+  const colors = useColors();
+  const { ghostButton } = useStyles();
   const [tab, setTab] = useState<ResponseTab>('response');
   const [showSaveResponseInput, setShowSaveResponseInput] = useState(false);
   const [saveResponseName, setSaveResponseName] = useState('');
@@ -48,12 +50,19 @@ export default function ResponsePanel() {
   }, [latestResult]);
 
   const hasError = response?.error;
-  const statusColor = hasError ? colors.error : response ? colors.success : colors.textMuted;
   const statusText = hasError
-    ? `Error (${response.error?.code})`
+    ? `Error ${response.error?.code || ''}`
     : response
-    ? 'Success'
+    ? '200 OK'
     : '';
+  const statusBg = hasError ? '#fee2e2' : response ? colors.successLight : 'transparent';
+  const statusColor = hasError ? colors.error : response ? colors.successDark : colors.textMuted;
+
+  const handleCopyResponse = () => {
+    if (response) {
+      navigator.clipboard.writeText(JSON.stringify(response, null, 2));
+    }
+  };
 
   return (
     <div
@@ -62,103 +71,97 @@ export default function ResponsePanel() {
         flexDirection: 'column',
         height: '100%',
         overflow: 'hidden',
+        background: colors.surfaceLight,
       }}
     >
-      {/* Header with tabs */}
+      {/* Header */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '0',
-          borderBottom: `1px solid ${colors.border}`,
-          background: colors.surface,
+          justifyContent: 'space-between',
+          padding: '8px 16px 9px',
+          borderBottom: `1px solid ${colors.borderLight}`,
         }}
       >
-        <button
-          onClick={() => setTab('response')}
-          style={{
-            padding: '10px 14px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: tab === 'response' ? `2px solid ${colors.accent}` : '2px solid transparent',
-            color: tab === 'response' ? colors.text : colors.textDim,
-            fontSize: '11px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            cursor: 'pointer',
-          }}
-        >
-          Response
-        </button>
-        <button
-          onClick={() => setTab('notifications')}
-          style={{
-            padding: '10px 14px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: tab === 'notifications' ? `2px solid ${colors.accent}` : '2px solid transparent',
-            color: tab === 'notifications' ? colors.text : colors.textDim,
-            fontSize: '11px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          Notifications
-          {notifications.length > 0 && (
-            <span
-              style={{
-                background: colors.accent,
-                color: colors.white,
-                borderRadius: '8px',
-                padding: '0 6px',
-                fontSize: '10px',
-                lineHeight: '16px',
-              }}
-            >
-              {notifications.length}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Response label */}
+          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>
+            Response
+          </span>
+
+          {/* Status + metrics */}
+          {tab === 'response' && statusText && !waitingForResult && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: statusColor,
+                  background: statusBg,
+                  padding: '2px 8px',
+                  borderRadius: '2px',
+                }}
+              >
+                {statusText}
+              </span>
+              {responseTime !== null && (
+                <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
+                  Time: <span style={{ color: colors.text }}>{responseTime} ms</span>
+                </span>
+              )}
+              {response && (
+                <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
+                  Size: <span style={{ color: colors.text }}>{(JSON.stringify(response).length / 1024).toFixed(1)} KB</span>
+                </span>
+              )}
+            </div>
+          )}
+
+          {tab === 'response' && isSending && (
+            <span style={{ fontSize: '11px', color: colors.warning, fontWeight: 500 }}>
+              Sending...
             </span>
           )}
-        </button>
+        </div>
 
-        <div style={{ flex: 1 }} />
-
-        {tab === 'response' && statusText && !waitingForResult && (
-          <>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: statusColor,
-                padding: '2px 8px',
-                borderRadius: '3px',
-                background: statusColor + '18',
-              }}
-            >
-              {statusText}
-            </span>
-            {responseTime !== null && (
-              <span style={{ fontSize: '11px', color: colors.textDim, marginRight: '12px', marginLeft: '6px' }}>
-                {responseTime}ms
+        {/* Right side actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Notifications tab toggle */}
+          <button
+            onClick={() => setTab(tab === 'notifications' ? 'response' : 'notifications')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '10px',
+              fontWeight: 600,
+              color: tab === 'notifications' ? colors.accentOrange : colors.textMuted,
+              padding: '4px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            Notifications
+            {notifications.length > 0 && (
+              <span
+                style={{
+                  background: colors.accentOrange,
+                  color: colors.white,
+                  borderRadius: '8px',
+                  padding: '0 5px',
+                  fontSize: '9px',
+                  lineHeight: '16px',
+                }}
+              >
+                {notifications.length}
               </span>
             )}
-          </>
-        )}
+          </button>
 
-        {tab === 'response' && isSending && (
-          <span style={{ fontSize: '11px', color: colors.warning, marginRight: '12px' }}>
-            Sending...
-          </span>
-        )}
-
-        {/* Save Response button — only when tab has a saved request ref and a response */}
-        {tab === 'response' && savedRef && response && !isSending && (
-          <div style={{ position: 'relative', marginRight: '4px' }}>
+          {/* Save Response button */}
+          {tab === 'response' && savedRef && response && !isSending && (
             <button
               onClick={() => {
                 setSaveResponseName(
@@ -174,14 +177,12 @@ export default function ResponsePanel() {
                 padding: '3px 8px',
               }}
             >
-              Save Response
+              Save
             </button>
-          </div>
-        )}
+          )}
 
-        {/* Saved responses dropdown toggle */}
-        {tab === 'response' && savedResponses.length > 0 && (
-          <div style={{ position: 'relative', marginRight: '8px' }}>
+          {/* Saved responses dropdown toggle */}
+          {tab === 'response' && savedResponses.length > 0 && (
             <button
               onClick={() => setShowSavedResponses(!showSavedResponses)}
               style={{
@@ -194,8 +195,28 @@ export default function ResponsePanel() {
             >
               Saved ({savedResponses.length})
             </button>
-          </div>
-        )}
+          )}
+
+          {/* Copy button */}
+          {response && tab === 'response' && (
+            <button
+              onClick={handleCopyResponse}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+                color: colors.textMuted,
+              }}
+              title="Copy response"
+            >
+              <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="1" width="8" height="10" rx="1" />
+                <path d="M1 4v9a1 1 0 001 1h7" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Save Response Name Input */}
@@ -203,8 +224,8 @@ export default function ResponsePanel() {
         <div
           style={{
             padding: '8px 12px',
-            background: colors.surfaceLight,
-            borderBottom: `1px solid ${colors.border}`,
+            background: colors.surface,
+            borderBottom: `1px solid ${colors.borderLight}`,
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -216,7 +237,7 @@ export default function ResponsePanel() {
             style={{
               flex: 1,
               padding: '4px 8px',
-              background: colors.bg,
+              background: colors.surface,
               color: colors.text,
               border: `1px solid ${colors.border}`,
               borderRadius: '3px',
@@ -274,10 +295,10 @@ export default function ResponsePanel() {
       {showSavedResponses && savedResponses.length > 0 && savedRef && (
         <div
           style={{
-            borderBottom: `1px solid ${colors.border}`,
+            borderBottom: `1px solid ${colors.borderLight}`,
             maxHeight: '200px',
             overflow: 'auto',
-            background: colors.surfaceLight,
+            background: colors.surface,
           }}
         >
           {savedResponses.map((sr) => (
@@ -288,7 +309,7 @@ export default function ResponsePanel() {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '6px 12px',
-                borderBottom: `1px solid ${colors.border}`,
+                borderBottom: `1px solid ${colors.borderLight}`,
                 cursor: 'pointer',
               }}
               onClick={() => {
@@ -296,7 +317,7 @@ export default function ResponsePanel() {
                 setShowSavedResponses(false);
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = colors.bg;
+                (e.currentTarget as HTMLElement).style.background = colors.surfaceLight;
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -341,7 +362,7 @@ export default function ResponsePanel() {
                   (e.target as HTMLElement).style.color = colors.textMuted;
                 }}
               >
-                x
+                ×
               </button>
             </div>
           ))}
@@ -353,14 +374,14 @@ export default function ResponsePanel() {
         <div
           style={{
             padding: '6px 12px',
-            background: colors.success + '15',
+            background: colors.successLight,
             borderBottom: `1px solid ${colors.success}30`,
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
           }}
         >
-          <span style={{ fontSize: '11px', color: colors.success, fontWeight: 600 }}>
+          <span style={{ fontSize: '11px', color: colors.successDark, fontWeight: 600 }}>
             Viewing: {viewingSavedResponse.name}
           </span>
           <span style={{ flex: 1 }} />
@@ -418,6 +439,7 @@ function ResponseView({
   isConnected: boolean;
   onCancelWaiting: () => void;
 }) {
+  const colors = useColors();
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
       {/* Waiting for Result banner */}
@@ -429,9 +451,9 @@ function ResponseView({
       {latestResult != null && !waitingForResult && (
         <div
           style={{
-            padding: '12px',
-            background: colors.warning + '0a',
-            borderBottom: `1px solid ${colors.warning}30`,
+            padding: '12px 16px',
+            background: colors.warning + '08',
+            borderBottom: `1px solid ${colors.warning}20`,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -456,18 +478,18 @@ function ResponseView({
             </span>
             <span
               style={{
-                fontSize: '11px',
-                fontWeight: 600,
+                fontSize: '10px',
+                fontWeight: 700,
                 color:
                   (latestResult as Record<string, unknown>).resultCodeName === 'RESULT_OK'
-                    ? colors.success
+                    ? colors.successDark
                     : colors.error,
-                padding: '1px 8px',
-                borderRadius: '3px',
+                padding: '2px 8px',
+                borderRadius: '2px',
                 background:
-                  ((latestResult as Record<string, unknown>).resultCodeName === 'RESULT_OK'
-                    ? colors.success
-                    : colors.error) + '18',
+                  (latestResult as Record<string, unknown>).resultCodeName === 'RESULT_OK'
+                    ? colors.successLight
+                    : '#fee2e2',
               }}
             >
               {String((latestResult as Record<string, unknown>).resultCodeName || 'UNKNOWN')}
@@ -475,7 +497,8 @@ function ResponseView({
           </div>
           <div
             style={{
-              background: colors.codeBg,
+              background: colors.surface,
+              border: `1px solid ${colors.borderLight}`,
               padding: '10px',
               borderRadius: '4px',
               fontFamily: "'Consolas', 'Courier New', monospace",
@@ -483,7 +506,7 @@ function ResponseView({
               lineHeight: '1.5',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              color: colors.text,
+              color: colors.textSecondary,
               maxHeight: '300px',
               overflow: 'auto',
             }}
@@ -493,22 +516,21 @@ function ResponseView({
         </div>
       )}
 
-      {/* Regular Response */}
+      {/* Regular Response with line numbers */}
       <div
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '12px',
-          background: colors.codeBg,
-          fontFamily: "'Consolas', 'Courier New', monospace",
+          padding: '16px',
+          fontFamily: "'Liberation Mono', 'Consolas', 'Courier New', monospace",
           fontSize: '13px',
-          lineHeight: '1.5',
+          lineHeight: '20px',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
         }}
       >
         {response ? (
-          <JsonTree data={response} />
+          <JsonWithLineNumbers data={response} />
         ) : (
           <span style={{ color: colors.textMuted }}>
             {isSending
@@ -523,6 +545,88 @@ function ResponseView({
   );
 }
 
+// ── JSON with Line Numbers ────────────────────────────────────
+
+function JsonWithLineNumbers({ data }: { data: unknown }) {
+  const colors = useColors();
+  const jsonStr = JSON.stringify(data, null, 2);
+  const lines = jsonStr.split('\n');
+
+  return (
+    <div style={{ display: 'flex', gap: '16px' }}>
+      {/* Line numbers gutter */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '32px', userSelect: 'none' }}>
+        {lines.map((_, i) => (
+          <span key={i} style={{ color: colors.textMuted, fontSize: '13px', lineHeight: '20px' }}>
+            {i + 1}
+          </span>
+        ))}
+      </div>
+
+      {/* Code content */}
+      <div style={{ flex: 1 }}>
+        {lines.map((line, i) => (
+          <div key={i} style={{ lineHeight: '20px' }}>
+            <SyntaxHighlightedLine line={line} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SyntaxHighlightedLine({ line }: { line: string }) {
+  const colors = useColors();
+  // Simple regex-based syntax highlighting
+  const parts: React.ReactNode[] = [];
+  let remaining = line;
+  let keyIdx = 0;
+
+  while (remaining.length > 0) {
+    // Match quoted key before colon: "key":
+    const keyMatch = remaining.match(/^(\s*)"([^"]+)"(\s*:\s*)/);
+    if (keyMatch) {
+      parts.push(<span key={keyIdx++}>{keyMatch[1]}"</span>);
+      parts.push(<span key={keyIdx++} style={{ color: colors.codeKey }}>{keyMatch[2]}</span>);
+      parts.push(<span key={keyIdx++}>"{ keyMatch[3]}</span>);
+      remaining = remaining.slice(keyMatch[0].length);
+      continue;
+    }
+
+    // Match string value: "value"
+    const strMatch = remaining.match(/^"([^"]*)"/);
+    if (strMatch) {
+      parts.push(<span key={keyIdx++}>"</span>);
+      parts.push(<span key={keyIdx++} style={{ color: colors.codeString }}>{strMatch[1]}</span>);
+      parts.push(<span key={keyIdx++}>"</span>);
+      remaining = remaining.slice(strMatch[0].length);
+      continue;
+    }
+
+    // Match number
+    const numMatch = remaining.match(/^(-?\d+\.?\d*)/);
+    if (numMatch) {
+      parts.push(<span key={keyIdx++} style={{ color: colors.codeNumber }}>{numMatch[1]}</span>);
+      remaining = remaining.slice(numMatch[0].length);
+      continue;
+    }
+
+    // Match boolean/null
+    const boolMatch = remaining.match(/^(true|false|null)/);
+    if (boolMatch) {
+      parts.push(<span key={keyIdx++} style={{ color: colors.codeBool }}>{boolMatch[1]}</span>);
+      remaining = remaining.slice(boolMatch[0].length);
+      continue;
+    }
+
+    // Default: single character
+    parts.push(<span key={keyIdx++} style={{ color: colors.textSecondary }}>{remaining[0]}</span>);
+    remaining = remaining.slice(1);
+  }
+
+  return <>{parts}</>;
+}
+
 // ── Waiting Banner with animation ─────────────────────────────
 
 function WaitingBanner({
@@ -532,6 +636,7 @@ function WaitingBanner({
   startTime: number | null;
   onCancel: () => void;
 }) {
+  const colors = useColors();
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -549,8 +654,8 @@ function WaitingBanner({
     <div
       style={{
         padding: '16px',
-        background: `linear-gradient(135deg, ${colors.warning}12, ${colors.warning}08)`,
-        borderBottom: `2px solid ${colors.warning}40`,
+        background: colors.warning + '08',
+        borderBottom: `2px solid ${colors.warning}30`,
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
@@ -612,7 +717,7 @@ function WaitingBanner({
           whiteSpace: 'nowrap',
         }}
         onMouseEnter={(e) => {
-          (e.target as HTMLElement).style.background = colors.error + '20';
+          (e.target as HTMLElement).style.background = colors.error + '10';
         }}
         onMouseLeave={(e) => {
           (e.target as HTMLElement).style.background = 'transparent';
@@ -640,6 +745,7 @@ function NotificationsView({
   notifications: Array<{ method: string; params?: Record<string, unknown> }>;
   onClear: () => void;
 }) {
+  const colors = useColors();
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
       {/* Clear button */}
@@ -647,7 +753,7 @@ function NotificationsView({
         <div
           style={{
             padding: '6px 12px',
-            borderBottom: `1px solid ${colors.border}`,
+            borderBottom: `1px solid ${colors.borderLight}`,
             display: 'flex',
             justifyContent: 'flex-end',
           }}
@@ -680,7 +786,7 @@ function NotificationsView({
             key={i}
             style={{
               padding: '8px 12px',
-              borderBottom: `1px solid ${colors.border}`,
+              borderBottom: `1px solid ${colors.borderLight}`,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -699,13 +805,14 @@ function NotificationsView({
               <div
                 style={{
                   marginTop: '4px',
-                  background: colors.codeBg,
+                  background: colors.surface,
+                  border: `1px solid ${colors.borderLight}`,
                   padding: '6px 8px',
                   borderRadius: '3px',
                   fontFamily: 'monospace',
                   fontSize: '11px',
                   whiteSpace: 'pre-wrap',
-                  color: colors.textDim,
+                  color: colors.textSecondary,
                   maxHeight: '120px',
                   overflow: 'auto',
                 }}
@@ -720,22 +827,23 @@ function NotificationsView({
   );
 }
 
-// ── JSON Tree Renderer ────────────────────────────────────────
+// ── JSON Tree Renderer (fallback) ────────────────────────────
 
 function JsonTree({ data, indent = 0 }: { data: unknown; indent?: number }) {
+  const colors = useColors();
   const pad = '  '.repeat(indent);
 
-  if (data === null) return <span style={{ color: '#7c8491' }}>null</span>;
-  if (data === undefined) return <span style={{ color: '#7c8491' }}>undefined</span>;
+  if (data === null) return <span style={{ color: colors.textMuted }}>null</span>;
+  if (data === undefined) return <span style={{ color: colors.textMuted }}>undefined</span>;
 
   if (typeof data === 'string') {
-    return <span style={{ color: '#a5d6ff' }}>"{data}"</span>;
+    return <span style={{ color: colors.codeString }}>"{data}"</span>;
   }
   if (typeof data === 'number') {
-    return <span style={{ color: '#79c0ff' }}>{data}</span>;
+    return <span style={{ color: colors.codeNumber }}>{data}</span>;
   }
   if (typeof data === 'boolean') {
-    return <span style={{ color: '#ff7b72' }}>{String(data)}</span>;
+    return <span style={{ color: colors.codeBool }}>{String(data)}</span>;
   }
 
   if (Array.isArray(data)) {
@@ -763,7 +871,7 @@ function JsonTree({ data, indent = 0 }: { data: unknown; indent?: number }) {
         {'{\n'}
         {entries.map(([key, value], i) => (
           <span key={key}>
-            {pad}  <span style={{ color: '#d2a8ff' }}>"{key}"</span>: <JsonTree data={value} indent={indent + 1} />
+            {pad}  <span style={{ color: colors.codeKey }}>"{key}"</span>: <JsonTree data={value} indent={indent + 1} />
             {i < entries.length - 1 ? ',' : ''}
             {'\n'}
           </span>

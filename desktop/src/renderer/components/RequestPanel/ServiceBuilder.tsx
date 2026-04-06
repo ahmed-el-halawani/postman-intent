@@ -2,12 +2,25 @@ import React, { useState } from 'react';
 import { useServiceStore } from '../../store/serviceStore';
 import { useTabStore } from '../../store/tabStore';
 import { useDeviceStore } from '../../store/deviceStore';
-import { colors, monoInput, label, accentButton, ghostButton } from '../../styles';
+import { useColors, useStyles } from '../../styles';
+import { INTENT_FLAGS } from '../../../shared/types';
 import ExtrasEditor from './ExtrasEditor';
 
-type ServiceAction = 'start' | 'stop' | 'bind';
+// Service-relevant flag groups
+const OTHER_FLAGS = INTENT_FLAGS.filter(
+  (f) => !f.startsWith('FLAG_ACTIVITY_') && !f.startsWith('FLAG_RECEIVER_')
+);
 
-export default function ServiceBuilder() {
+type ServiceAction = 'start' | 'stop' | 'bind';
+type Section = 'params' | 'extras' | 'flags';
+
+interface ServiceBuilderProps {
+  section?: Section;
+}
+
+export default function ServiceBuilder({ section = 'params' }: ServiceBuilderProps) {
+  const colors = useColors();
+  const { monoInput, label, accentButton, ghostButton } = useStyles();
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
 
@@ -144,12 +157,47 @@ export default function ServiceBuilder() {
     setActiveTabResponse(response, elapsed);
   };
 
+  const toggleFlag = (flag: string) => {
+    if (!request) return;
+    const flags = request.flags.includes(flag)
+      ? request.flags.filter((f) => f !== flag)
+      : [...request.flags, flag];
+    updateRequest({ flags });
+  };
+
   const connectedBindings = bindings.filter((b) => b.connected);
 
   if (!request) return null;
 
+  // ── Extras Section ──
+  if (section === 'extras') {
+    return (
+      <div style={{ padding: '16px' }}>
+        <ExtrasEditor />
+      </div>
+    );
+  }
+
+  // ── Flags Section ──
+  if (section === 'flags') {
+    return (
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        {/* Other Flags (non-activity, non-receiver flags relevant for services) */}
+        {OTHER_FLAGS.length > 0 && (
+          <FlagGroup
+            title="Service Flags"
+            flags={OTHER_FLAGS}
+            activeFlags={request.flags}
+            onToggle={toggleFlag}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Params Section ──
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
       {/* ── Service Operations ────────────────────────── */}
       <div>
         <div style={sectionHeader}>
@@ -215,9 +263,6 @@ export default function ServiceBuilder() {
               />
             </div>
           )}
-
-          {/* Extras — for start/stop service intents */}
-          {serviceAction !== 'bind' && <ExtrasEditor />}
 
           <button
             style={{
@@ -579,6 +624,74 @@ export default function ServiceBuilder() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ── Shared Flag Group Component ──────────────────────────
+function FlagGroup({
+  title,
+  flags,
+  activeFlags,
+  onToggle,
+}: {
+  title: string;
+  flags: string[];
+  activeFlags: string[];
+  onToggle: (flag: string) => void;
+}) {
+  const colors = useColors();
+  const { label } = useStyles();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ ...label, marginBottom: 0 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {flags.map((flag) => {
+          const active = activeFlags.includes(flag);
+          return (
+            <label
+              key={flag}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              <div
+                onClick={() => onToggle(flag)}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '2px',
+                  border: active ? 'none' : `1px solid ${colors.border}`,
+                  background: active ? colors.accent : colors.surface,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {active && (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: colors.textSecondary,
+                }}
+              >
+                {flag}
+              </span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }

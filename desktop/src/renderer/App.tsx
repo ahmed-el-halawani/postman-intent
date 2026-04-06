@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useDeviceStore } from './store/deviceStore';
 import { useNotificationStore } from './store/notificationStore';
 import { useBroadcastStore } from './store/broadcastStore';
 import { useServiceStore } from './store/serviceStore';
 import { useTabStore } from './store/tabStore';
 import { useCollectionsStore } from './store/collectionsStore';
-import { colors } from './styles';
+import { useColors } from './styles';
 import DeviceBar from './components/DeviceBar/DeviceBar';
 import Sidebar from './components/Sidebar/Sidebar';
 import RequestPanel from './components/RequestPanel/RequestPanel';
@@ -19,6 +19,37 @@ export default function App() {
   const addNotification = useNotificationStore((s) => s.addNotification);
   const showSaveDialog = useTabStore((s) => s.showSaveDialog);
   const showUnsavedDialog = useTabStore((s) => s.showUnsavedDialog);
+  const colors = useColors();
+
+  // Resize state for request/response horizontal split
+  const [requestPanelRatio, setRequestPanelRatio] = useState(0.5);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const mainArea = document.getElementById('main-content-area');
+      if (!mainArea) return;
+      const rect = mainArea.getBoundingClientRect();
+      const ratio = (e.clientX - rect.left) / rect.width;
+      setRequestPanelRatio(Math.max(0.25, Math.min(0.75, ratio)));
+    };
+
+    const handleMouseUp = () => setIsResizing(false);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     refreshDevices();
@@ -102,7 +133,7 @@ export default function App() {
         height: '100vh',
         background: colors.bg,
         color: colors.text,
-        fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+        fontFamily: "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
       <DeviceBar />
@@ -114,23 +145,113 @@ export default function App() {
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <TabBar />
 
-          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* Horizontal split: Request (left) / Response (right) */}
+          <div
+            id="main-content-area"
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flex: 1,
+              overflow: 'hidden',
+            }}
+          >
             {/* Request Panel */}
             <div
               style={{
-                flex: 1,
-                borderRight: `1px solid ${colors.border}`,
+                width: `${requestPanelRatio * 100}%`,
                 overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <RequestPanel />
             </div>
 
+            {/* Resize handle */}
+            <div
+              onMouseDown={handleResizeMouseDown}
+              style={{
+                width: '4px',
+                minWidth: '4px',
+                background: colors.borderLight,
+                cursor: 'col-resize',
+                flexShrink: 0,
+                borderLeft: `1px solid ${colors.border}`,
+                transition: isResizing ? 'none' : 'background 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = colors.accentOrange + '40';
+              }}
+              onMouseLeave={(e) => {
+                if (!isResizing) {
+                  (e.currentTarget as HTMLElement).style.background = colors.borderLight;
+                }
+              }}
+            />
+
             {/* Response Panel */}
-            <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflow: 'hidden', minWidth: '200px' }}>
               <ResponsePanel />
             </div>
           </div>
+        </div>
+
+        {/* Right Action Sidebar */}
+        <div
+          style={{
+            width: '48px',
+            minWidth: '48px',
+            background: colors.surfaceLight,
+            borderLeft: `1px solid ${colors.borderLight}`,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '24px',
+            padding: '16px 0',
+          }}
+        >
+          {/* Code icon */}
+          <button
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              color: colors.textMuted,
+              fontSize: '16px',
+            }}
+            title="Code"
+          >
+            {'</>'}
+          </button>
+          {/* Docs icon */}
+          <button
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              color: colors.textMuted,
+              fontSize: '14px',
+            }}
+            title="Documentation"
+          >
+            &#128196;
+          </button>
+          {/* Comments icon */}
+          <button
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              color: colors.textMuted,
+              fontSize: '14px',
+            }}
+            title="Comments"
+          >
+            &#128172;
+          </button>
         </div>
       </div>
 

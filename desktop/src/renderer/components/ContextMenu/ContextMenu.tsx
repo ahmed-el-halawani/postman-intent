@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { colors } from '../../styles';
+import { useColors } from '../../styles';
 
 export interface ContextMenuItem {
   label: string;
@@ -22,6 +22,7 @@ interface ContextMenuProps {
 }
 
 export default function ContextMenu({ items, position, onClose }: ContextMenuProps) {
+  const colors = useColors();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export default function ContextMenu({ items, position, onClose }: ContextMenuPro
         borderRadius: '6px',
         padding: '4px 0',
         minWidth: '160px',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08)',
         zIndex: 2000,
       }}
     >
@@ -118,8 +119,8 @@ export default function ContextMenu({ items, position, onClose }: ContextMenuPro
             onMouseEnter={(e) => {
               if (!item.disabled) {
                 (e.target as HTMLElement).style.background = item.danger
-                  ? colors.error + '20'
-                  : colors.bg;
+                  ? colors.error + '10'
+                  : colors.surfaceLight;
               }
             }}
             onMouseLeave={(e) => {

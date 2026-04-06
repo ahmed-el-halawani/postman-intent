@@ -2,10 +2,27 @@ import React, { useState } from 'react';
 import { useBroadcastStore } from '../../store/broadcastStore';
 import { useTabStore } from '../../store/tabStore';
 import { useDeviceStore } from '../../store/deviceStore';
-import { colors, monoInput, label, accentButton, ghostButton } from '../../styles';
+import { useColors, useStyles } from '../../styles';
+import { INTENT_FLAGS } from '../../../shared/types';
 import ExtrasEditor from './ExtrasEditor';
 
-export default function BroadcastBuilder() {
+// Broadcast-relevant flag groups
+const RECEIVER_FLAGS = INTENT_FLAGS.filter((f) =>
+  f.startsWith('FLAG_RECEIVER_')
+);
+const OTHER_FLAGS = INTENT_FLAGS.filter(
+  (f) => !f.startsWith('FLAG_ACTIVITY_') && !f.startsWith('FLAG_RECEIVER_')
+);
+
+type Section = 'params' | 'extras' | 'flags';
+
+interface BroadcastBuilderProps {
+  section?: Section;
+}
+
+export default function BroadcastBuilder({ section = 'params' }: BroadcastBuilderProps) {
+  const colors = useColors();
+  const { monoInput, label, accentButton, ghostButton } = useStyles();
   const connectionStatus = useDeviceStore((s) => s.connectionStatus);
   const isConnected = connectionStatus === 'connected';
 
@@ -59,10 +76,55 @@ export default function BroadcastBuilder() {
     setListenAction('');
   };
 
+  const toggleFlag = (flag: string) => {
+    if (!request) return;
+    const flags = request.flags.includes(flag)
+      ? request.flags.filter((f) => f !== flag)
+      : [...request.flags, flag];
+    updateRequest({ flags });
+  };
+
   if (!request) return null;
 
+  // ── Extras Section ──
+  if (section === 'extras') {
+    return (
+      <div style={{ padding: '16px' }}>
+        <ExtrasEditor />
+      </div>
+    );
+  }
+
+  // ── Flags Section ──
+  if (section === 'flags') {
+    return (
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        {/* Receiver Flags */}
+        {RECEIVER_FLAGS.length > 0 && (
+          <FlagGroup
+            title="Receiver Flags"
+            flags={RECEIVER_FLAGS}
+            activeFlags={request.flags}
+            onToggle={toggleFlag}
+          />
+        )}
+
+        {/* Other Flags */}
+        {OTHER_FLAGS.length > 0 && (
+          <FlagGroup
+            title="Other Flags"
+            flags={OTHER_FLAGS}
+            activeFlags={request.flags}
+            onToggle={toggleFlag}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Params Section ──
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
       {/* ── Send Broadcast Section ────────────────────── */}
       <div>
         <div style={sectionHeader}>
@@ -111,9 +173,6 @@ export default function BroadcastBuilder() {
               />
             </div>
           </div>
-
-          {/* Extras — reuse the shared ExtrasEditor */}
-          <ExtrasEditor />
 
           <button
             style={{
@@ -342,6 +401,74 @@ export default function BroadcastBuilder() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ── Shared Flag Group Component ──────────────────────────
+function FlagGroup({
+  title,
+  flags,
+  activeFlags,
+  onToggle,
+}: {
+  title: string;
+  flags: string[];
+  activeFlags: string[];
+  onToggle: (flag: string) => void;
+}) {
+  const colors = useColors();
+  const { label } = useStyles();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ ...label, marginBottom: 0 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {flags.map((flag) => {
+          const active = activeFlags.includes(flag);
+          return (
+            <label
+              key={flag}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              <div
+                onClick={() => onToggle(flag)}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '2px',
+                  border: active ? 'none' : `1px solid ${colors.border}`,
+                  background: active ? colors.accent : colors.surface,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {active && (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: colors.textSecondary,
+                }}
+              >
+                {flag}
+              </span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
