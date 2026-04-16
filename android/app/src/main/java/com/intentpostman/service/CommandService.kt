@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import com.intentpostman.server.CommandServer
 import com.intentpostman.ui.MainActivity
 
@@ -94,16 +95,18 @@ class CommandService : Service() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Intent Postman Server",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Shows when the Intent Postman server is running"
-            setShowBadge(false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Intent Postman Server",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows when the Intent Postman server is running"
+                setShowBadge(false)
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(port: Int): Notification {
@@ -114,7 +117,7 @@ class CommandService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return Notification.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Intent Postman")
             .setContentText("Server running on port $port")
             .setSmallIcon(android.R.drawable.stat_notify_sync)

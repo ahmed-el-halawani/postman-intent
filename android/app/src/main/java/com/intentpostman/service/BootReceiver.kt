@@ -3,6 +3,8 @@ package com.intentpostman.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import androidx.core.content.ContextCompat
 
 /**
  * Starts the CommandService automatically when the device boots.
@@ -14,7 +16,7 @@ class BootReceiver : BroadcastReceiver() {
                 action = CommandService.ACTION_START
                 putExtra(CommandService.EXTRA_PORT, CommandService.DEFAULT_PORT)
             }
-            context.startForegroundService(serviceIntent)
+            ContextCompat.startForegroundService(context,serviceIntent)
         }
     }
 }

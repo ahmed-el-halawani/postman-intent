@@ -1,6 +1,5 @@
 package com.intentpostman.ui
 
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
@@ -9,9 +8,11 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.gson.Gson
 import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
-import com.intentpostman.server.JsonRpcNotification
+import com.intentpostman.server.JsonRpcException
 
 /**
  * Transparent activity that starts an intent for result.
@@ -43,7 +44,7 @@ class ResultActivity : ComponentActivity() {
 
     private val startActivityForResult =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            Log.e(TAG, "onActivityResult: ${result.resultCode}" )
+            Log.e(TAG, "onActivityResult: ${result.resultCode}")
             deliverResult(result.resultCode, result.data)
             finish()
         }
@@ -51,24 +52,24 @@ class ResultActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Log.e(TAG, "onResume: ", )
+        Log.e(TAG, "onResume: ")
     }
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.e(TAG, "onCreate: ResultActivity" )
+        Log.e(TAG, "onCreate: ResultActivity")
 
 
         // Make this activity click-through so touches pass to the target activity below
         window.setFlags(
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         )
 
-        Log.e(TAG, "onCreate: ", )
+        Log.e(TAG, "onCreate: ")
 
 
 
@@ -77,7 +78,7 @@ class ResultActivity : ComponentActivity() {
         requestId = intent.getStringExtra(EXTRA_REQUEST_ID) ?: ""
 
         val targetIntent = buildTargetIntent()
-        Log.e(TAG, "ResultActivity: " )
+        Log.e(TAG, "ResultActivity: ")
 
         try {
             @Suppress("DEPRECATION")
@@ -121,9 +122,61 @@ class ResultActivity : ComponentActivity() {
             targetIntent.addCategory(it)
         }
 
+
+        val jsonObject = Gson().fromJson(intent.getStringExtra(EXTRA_INTENT_EXTRAS_JSON), JsonObject::class.java)
+        jsonObject?.getAsJsonArray("extras")?.forEach { extraEl ->
+            val extra = extraEl.asJsonObject
+            val key = extra.get("key")?.asString ?: return@forEach
+            val type = extra.get("type")?.asString ?: "string"
+            val value = extra.get("value") ?: return@forEach
+            putExtra(targetIntent, key, type, value)
+        }
+
+
         val flags = intent.getIntExtra(EXTRA_FLAGS_INT, 0)
         if (flags != 0) targetIntent.addFlags(flags)
 
         return targetIntent
     }
+
+    private fun putExtra(intent: Intent, key: String, type: String, value: JsonElement) {
+        try {
+            when (type) {
+                "string" -> intent.putExtra(key, value.asString)
+                "int" -> intent.putExtra(key, value.asString.toInt())
+                "long" -> intent.putExtra(key, value.asString.toLong())
+                "float" -> intent.putExtra(key, value.asString.toFloat())
+                "double" -> intent.putExtra(key, value.asString.toDouble())
+                "bool" -> intent.putExtra(key, value.asString.toBooleanStrict())
+                "uri" -> intent.putExtra(key, Uri.parse(value.asString))
+                "string_array" -> {
+                    if (value.isJsonArray) {
+                        intent.putExtra(key, value.asJsonArray.map { it.asString }.toTypedArray())
+                    } else {
+                        intent.putExtra(
+                            key,
+                            value.asString.split(",").map { it.trim() }.toTypedArray()
+                        )
+                    }
+                }
+
+                "int_array" -> {
+                    if (value.isJsonArray) {
+                        intent.putExtra(key, value.asJsonArray.map { it.asInt }.toIntArray())
+                    } else {
+                        intent.putExtra(
+                            key,
+                            value.asString.split(",").map { it.trim().toInt() }.toIntArray()
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            throw JsonRpcException(
+                -32602,
+                "Invalid extra value for key '$key' (type=$type): ${e.message}"
+            )
+        }
+    }
+
 }

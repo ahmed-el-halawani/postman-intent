@@ -25,7 +25,7 @@ import com.intentpostman.service.FloatingIndicatorService
  */
 class MainActivity : ComponentActivity() {
 
-    private  val TAG = "MainActivity"
+    private val TAG = "MainActivity"
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
@@ -34,14 +34,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.e(TAG, "onCreate: mainactivity" )
+        Log.e(TAG, "onCreate: mainactivity")
 
         // Make this activity fully click-through — touches pass to apps below
         window.setFlags(
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         )
 
         // Request notification permission on Android 13+
@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
             )
+
             startActivity(intent)
         }
 
@@ -77,7 +78,7 @@ class MainActivity : ComponentActivity() {
             action = CommandService.ACTION_START
             putExtra(CommandService.EXTRA_PORT, CommandService.DEFAULT_PORT)
         }
-        startForegroundService(serviceIntent)
+            ContextCompat.startForegroundService(this,serviceIntent)
 
         // Start the floating indicator overlay
         if (Settings.canDrawOverlays(this)) {

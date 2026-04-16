@@ -13,11 +13,10 @@ import com.google.gson.JsonObject
 import com.intentpostman.server.JsonRpcException
 import com.intentpostman.server.JsonRpcNotification
 import com.intentpostman.ui.ResultActivity
-import kotlinx.coroutines.CompletableDeferred
 
 class IntentHandler(
     private val context: Context,
-    private val pushNotification: ((JsonRpcNotification) -> Unit)? = null
+    private val pushNotification: ((JsonRpcNotification) -> Unit)? = null,
 ) {
 
     fun sendIntent(params: JsonObject?): JsonElement {
@@ -137,6 +136,7 @@ class IntentHandler(
         }
 
         // Launch the transparent ResultActivity
+
         val launchIntent = Intent(context, ResultActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra(ResultActivity.EXTRA_REQUEST_ID, requestId)
@@ -144,6 +144,14 @@ class IntentHandler(
             putExtra(ResultActivity.EXTRA_COMPONENT, params.get("component")?.asString ?: "")
             putExtra(ResultActivity.EXTRA_DATA, params.get("data")?.asString ?: "")
             putExtra(ResultActivity.EXTRA_MIME_TYPE, params.get("mimeType")?.asString ?: "")
+            try {
+                val x =  params.toString()
+
+                putExtra(ResultActivity.EXTRA_INTENT_EXTRAS_JSON, x ?: "")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
 
             // Categories
             params.getAsJsonArray("categories")?.let { cats ->
