@@ -292,6 +292,11 @@ export const useTabStore = create<TabState>((set, get) => ({
         ? (response.result as Record<string, unknown>).requestId as string
         : null;
 
+    const alreadyReceived =
+      isForResult &&
+      requestId != null &&
+      useNotificationStore.getState().latestResultRequestId === requestId;
+
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === activeTabId
@@ -300,9 +305,9 @@ export const useTabStore = create<TabState>((set, get) => ({
               response,
               responseTime: Math.round(elapsed),
               isSending: false,
-              waitingForResult: isForResult,
+              waitingForResult: isForResult && !alreadyReceived,
               waitingRequestId: requestId,
-              waitingStartTime: isForResult ? Date.now() : null,
+              waitingStartTime: isForResult && !alreadyReceived ? Date.now() : null,
             }
           : t
       ),

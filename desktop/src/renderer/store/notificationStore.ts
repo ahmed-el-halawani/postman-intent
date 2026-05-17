@@ -4,6 +4,7 @@ import type { JsonRpcNotification } from '../../shared/types';
 interface NotificationState {
   notifications: JsonRpcNotification[];
   latestResult: Record<string, unknown> | null;
+  latestResultRequestId: string | null;
   addNotification: (notification: JsonRpcNotification) => void;
   clearLatestResult: () => void;
   clearNotifications: () => void;
@@ -12,6 +13,7 @@ interface NotificationState {
 export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   latestResult: null,
+  latestResultRequestId: null,
 
   addNotification: (notification) => {
     set((state) => {
@@ -19,9 +21,12 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
       if (notification.method === 'intent.result') {
         const resultParams = notification.params as Record<string, unknown> | undefined;
+        const resultRequestId =
+          resultParams?.requestId != null ? String(resultParams.requestId) : null;
         return {
           notifications: updated,
           latestResult: resultParams ?? null,
+          latestResultRequestId: resultRequestId,
         };
       }
 
@@ -30,6 +35,6 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     // NOTE: waiting state cancellation is handled in App.tsx onNotification handler
   },
 
-  clearLatestResult: () => set({ latestResult: null }),
-  clearNotifications: () => set({ notifications: [], latestResult: null }),
+  clearLatestResult: () => set({ latestResult: null, latestResultRequestId: null }),
+  clearNotifications: () => set({ notifications: [], latestResult: null, latestResultRequestId: null }),
 }));
