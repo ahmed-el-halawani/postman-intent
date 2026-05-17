@@ -246,7 +246,7 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
           <div style={{ width: '40px', padding: '8px 12px', flexShrink: 0 }} />
           <div
             style={{
-              width: '192px',
+              width: '130px',
               flexShrink: 0,
               padding: '8px 12px',
               fontSize: '11px',
@@ -261,7 +261,9 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
           </div>
           <div
             style={{
-              flex: 1,
+                minWidth:'150px',
+
+              width: '300px',
               padding: '8px 12px',
               fontSize: '11px',
               fontWeight: 600,
@@ -275,7 +277,9 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
           </div>
           <div
             style={{
-              width: '250px',
+                minWidth:'90px',
+              
+              flex: 1,
               flexShrink: 0,
               padding: '8px 12px',
               fontSize: '11px',
@@ -324,7 +328,7 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
             {/* Key (dropdown-style label) */}
             <div
               style={{
-                width: '192px',
+                width: '130px',
                 flexShrink: 0,
                 padding: '6px 8px',
                 borderRight: `1px solid ${colors.borderLight}`,
@@ -342,16 +346,16 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
                 <span style={{ fontSize: '13px', fontWeight: 500, color: colors.textSecondary }}>
                   {row.key}
                 </span>
-                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ opacity: 0.4 }}>
-                  <path d="M1 1L5 5L9 1" stroke={colors.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+            
               </div>
             </div>
 
             {/* Value */}
             <div
               style={{
-                flex: 1,
+                minWidth:'150px',
+
+                width: '300px',
                 padding: '6px 12px',
                 borderRight: `1px solid ${colors.borderLight}`,
                 position: 'relative',
@@ -446,15 +450,37 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
             {/* Description */}
             <div
               style={{
-                width: '250px',
-                flexShrink: 0,
+                minWidth:'90px',
+                flex: 1,
                 padding: '12px',
                 fontSize: '13px',
                 fontStyle: 'italic',
                 color: colors.textMuted,
               }}
             >
-              {row.description}
+                   <input
+                style={{
+                  width: '100%',
+                  padding: '4px 0',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  fontSize: '13px',
+                  color: colors.textSecondary,
+                  fontFamily: "'Inter', sans-serif",
+                }}
+                value={request.descriptions?.[row.field] || ''}
+                onChange={(e) => {
+                  updateRequest({
+                    descriptions: {
+                      ...request.descriptions,
+                      [row.field]: e.target.value,
+                    },
+                  });
+                }}
+                placeholder={row.description}
+              />
+              
             </div>
           </div>
         ))}

@@ -120,6 +120,7 @@ export interface IntentRequest {
   flags: string[];
   extras: IntentExtra[];
   forResult: boolean;
+  descriptions?: Record<string, string>;
 }
 
 export interface HistoryEntry {

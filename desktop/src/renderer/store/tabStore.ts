@@ -70,6 +70,7 @@ const defaultRequest: IntentRequest = {
   flags: [],
   extras: [],
   forResult: false,
+  descriptions: {},
 };
 
 function createNewTab(name?: string, request?: IntentRequest, savedRef?: { collectionId: string; requestId: string }): RequestTab {
