@@ -483,6 +483,9 @@ export default function CollectionsTab() {
                   {collection.requests.map((req) => {
                     const isRenamingReq =
                       renamingRequestId === req.id && renamingCollectionForRequest === collection.id;
+                    const isActiveRequest =
+                      activeSavedRef?.collectionId === collection.id &&
+                      activeSavedRef?.requestId === req.id;
 
                     return (
                       <React.Fragment key={req.id}>
@@ -499,15 +502,20 @@ export default function CollectionsTab() {
                           borderBottom: `1px solid ${colors.sidebarBorder}`,
                           cursor: 'pointer',
                           transition: 'background 0.1s',
-                          borderLeft: '2px solid transparent',
+                          borderLeft: `2px solid ${isActiveRequest ? colors.accentOrange : 'transparent'}`,
+                          background: isActiveRequest ? colors.accentOrange + '12' : 'transparent',
                         }}
                         onMouseEnter={(e) => {
                           (e.currentTarget as HTMLElement).style.background = colors.sidebarActive;
                           (e.currentTarget as HTMLElement).style.borderLeftColor = colors.accentOrange;
                         }}
                         onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = 'transparent';
-                          (e.currentTarget as HTMLElement).style.borderLeftColor = 'transparent';
+                          (e.currentTarget as HTMLElement).style.background = isActiveRequest
+                            ? colors.accentOrange + '12'
+                            : 'transparent';
+                          (e.currentTarget as HTMLElement).style.borderLeftColor = isActiveRequest
+                            ? colors.accentOrange
+                            : 'transparent';
                         }}
                       >
                         {/* Type badge — text only */}
@@ -613,6 +621,7 @@ export default function CollectionsTab() {
                               renamingResponseId === sr.id &&
                               renamingResponseCollectionId === collection.id &&
                               renamingResponseRequestId === req.id;
+                            const isActiveSavedResponse = activeTab?.savedResponseId === sr.id;
 
                             return (
                               <div
@@ -629,12 +638,15 @@ export default function CollectionsTab() {
                                   color: colors.sidebarTextDim,
                                   cursor: 'pointer',
                                   transition: 'background 0.1s',
+                                  background: isActiveSavedResponse ? colors.accentOrange + '12' : 'transparent',
                                 }}
                                 onMouseEnter={(e) => {
                                   (e.currentTarget as HTMLElement).style.background = colors.sidebarActive;
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                  (e.currentTarget as HTMLElement).style.background = isActiveSavedResponse
+                                    ? colors.accentOrange + '12'
+                                    : 'transparent';
                                 }}
                               >
                                 {/* Status dot */}
