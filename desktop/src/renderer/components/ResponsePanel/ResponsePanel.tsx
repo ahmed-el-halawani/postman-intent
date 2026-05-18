@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTabStore } from '../../store/tabStore';
-import { useNotificationStore } from '../../store/notificationStore';
 import { useCollectionsStore } from '../../store/collectionsStore';
+import { useSidebarStore } from '../../store/sidebarStore';
 import { useColors, useStyles } from '../../styles';
 import { useDeviceStore } from '../../store/deviceStore';
-import type { SavedResponse, JsonRpcResponse } from '../../../shared/types';
+import type { SavedResponse, JsonRpcResponse, IntentRequest } from '../../../shared/types';
+import JsonTree from '../JsonTree';
 
-type ResponseTab = 'response' | 'notifications';
+type ResponseTab = 'request' | 'status' | 'result';
 
 export default function ResponsePanel() {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
@@ -20,7 +21,7 @@ export default function ResponsePanel() {
   const savedRef = activeTab?.savedRequestRef ?? null;
   const currentRequest = activeTab?.request ?? null;
 
-  const { notifications, latestResult, clearNotifications } = useNotificationStore();
+  const activityResult = activeTab?.activityResult ?? null;
   const collections = useCollectionsStore((s) => s.collections);
   const saveResponse = useCollectionsStore((s) => s.saveResponse);
   const deleteResponse = useCollectionsStore((s) => s.deleteResponse);
@@ -28,11 +29,14 @@ export default function ResponsePanel() {
   const isConnected = connectionStatus === 'connected';
   const colors = useColors();
   const { ghostButton } = useStyles();
-  const [tab, setTab] = useState<ResponseTab>('response');
+  const [tab, setTab] = useState<ResponseTab>('status');
   const [showSaveResponseInput, setShowSaveResponseInput] = useState(false);
   const [saveResponseName, setSaveResponseName] = useState('');
   const [showSavedResponses, setShowSavedResponses] = useState(false);
   const [viewingSavedResponse, setViewingSavedResponse] = useState<SavedResponse | null>(null);
+  const setSidebarTab = useSidebarStore((s) => s.setActiveTab);
+
+  const isForResult = currentRequest?.forResult ?? false;
 
   // Get saved responses for current tab's saved request
   const savedResponses: SavedResponse[] = (() => {
@@ -42,12 +46,23 @@ export default function ResponsePanel() {
     return req?.savedResponses || [];
   })();
 
-  // Auto-switch to response tab when a new result arrives
+  // Auto-switch tabs when request completes
   useEffect(() => {
-    if (latestResult) {
-      setTab('response');
+    if (!isSending && response) {
+      if (isForResult) {
+        setTab('result');
+      } else {
+        setTab('status');
+      }
     }
-  }, [latestResult]);
+  }, [isSending, response, isForResult]);
+
+  // Auto-switch to result tab when activityResult arrives
+  useEffect(() => {
+    if (activityResult) {
+      setTab('result');
+    }
+  }, [activityResult]);
 
   const hasError = response?.error;
   const statusText = hasError
@@ -84,84 +99,15 @@ export default function ResponsePanel() {
           borderBottom: `1px solid ${colors.borderLight}`,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* Response label */}
-          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>
-            Response
-          </span>
-
-          {/* Status + metrics */}
-          {tab === 'response' && statusText && !waitingForResult && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: statusColor,
-                  background: statusBg,
-                  padding: '2px 8px',
-                  borderRadius: '2px',
-                }}
-              >
-                {statusText}
-              </span>
-              {responseTime !== null && (
-                <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
-                  Time: <span style={{ color: colors.text }}>{responseTime} ms</span>
-                </span>
-              )}
-              {response && (
-                <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
-                  Size: <span style={{ color: colors.text }}>{(JSON.stringify(response).length / 1024).toFixed(1)} KB</span>
-                </span>
-              )}
-            </div>
-          )}
-
-          {tab === 'response' && isSending && (
-            <span style={{ fontSize: '11px', color: colors.warning, fontWeight: 500 }}>
-              Sending...
-            </span>
-          )}
-        </div>
+        {/* Response label */}
+        <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>
+          Response
+        </span>
 
         {/* Right side actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Notifications tab toggle */}
-          <button
-            onClick={() => setTab(tab === 'notifications' ? 'response' : 'notifications')}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '10px',
-              fontWeight: 600,
-              color: tab === 'notifications' ? colors.accentOrange : colors.textMuted,
-              padding: '4px 8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            Notifications
-            {notifications.length > 0 && (
-              <span
-                style={{
-                  background: colors.accentOrange,
-                  color: colors.white,
-                  borderRadius: '8px',
-                  padding: '0 5px',
-                  fontSize: '9px',
-                  lineHeight: '16px',
-                }}
-              >
-                {notifications.length}
-              </span>
-            )}
-          </button>
-
           {/* Save Response button */}
-          {tab === 'response' && savedRef && response && !isSending && (
+          {savedRef && response && !isSending && (
             <button
               onClick={() => {
                 setSaveResponseName(
@@ -182,7 +128,7 @@ export default function ResponsePanel() {
           )}
 
           {/* Saved responses dropdown toggle */}
-          {tab === 'response' && savedResponses.length > 0 && (
+          {savedResponses.length > 0 && (
             <button
               onClick={() => setShowSavedResponses(!showSavedResponses)}
               style={{
@@ -198,7 +144,7 @@ export default function ResponsePanel() {
           )}
 
           {/* Copy button */}
-          {response && tab === 'response' && (
+          {response && (
             <button
               onClick={handleCopyResponse}
               style={{
@@ -217,6 +163,90 @@ export default function ResponsePanel() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Status bar — above tabs */}
+      {statusText && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 16px',
+            borderBottom: `1px solid ${colors.borderLight}`,
+          }}
+        >
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: statusColor,
+              background: statusBg,
+              padding: '2px 8px',
+              borderRadius: '2px',
+            }}
+          >
+            {statusText}
+          </span>
+          {responseTime !== null && (
+            <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
+              Time: <span style={{ color: colors.text }}>{responseTime} ms</span>
+            </span>
+          )}
+          {response && (
+            <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
+              Size: <span style={{ color: colors.text }}>{(JSON.stringify(response).length / 1024).toFixed(1)} KB</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {isSending && !statusText && (
+        <div style={{ padding: '6px 16px', borderBottom: `1px solid ${colors.borderLight}` }}>
+          <span style={{ fontSize: '11px', color: colors.warning, fontWeight: 500 }}>
+            Sending...
+          </span>
+        </div>
+      )}
+
+      {/* Tab Bar */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '24px',
+          padding: '0 16px',
+          borderBottom: `1px solid ${colors.borderLight}`,
+        }}
+      >
+        {([
+          { id: 'request' as ResponseTab, label: 'Request' },
+          { id: 'status' as ResponseTab, label: 'Request Status' },
+          { id: 'result' as ResponseTab, label: 'Result' },
+        ]).map((t) => {
+          const isActive = tab === t.id;
+          const isDisabled = t.id === 'result' && !isForResult && !viewingSavedResponse;
+          return (
+            <button
+              key={t.id}
+              onClick={() => {
+                if (!isDisabled) setTab(t.id);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${colors.accentOrange}` : '2px solid transparent',
+                color: isDisabled ? colors.textMuted + '60' : isActive ? colors.accentOrange : colors.textDim,
+                fontSize: '12px',
+                fontWeight: isActive ? 600 : 500,
+                padding: isActive ? '8px 0 10px' : '8px 0',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                transition: 'color 0.1s',
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Save Response Name Input */}
@@ -248,7 +278,7 @@ export default function ResponsePanel() {
             onChange={(e) => setSaveResponseName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && saveResponseName.trim() && currentRequest) {
-                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, latestResult);
+                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, activityResult);
                 setShowSaveResponseInput(false);
               }
               if (e.key === 'Escape') setShowSaveResponseInput(false);
@@ -257,7 +287,7 @@ export default function ResponsePanel() {
           <button
             onClick={() => {
               if (saveResponseName.trim() && currentRequest) {
-                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, latestResult);
+                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, activityResult);
               }
               setShowSaveResponseInput(false);
             }}
@@ -315,6 +345,7 @@ export default function ResponsePanel() {
               onClick={() => {
                 setViewingSavedResponse(sr);
                 setShowSavedResponses(false);
+                setSidebarTab('collections');
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.background = colors.surfaceLight;
@@ -400,123 +431,96 @@ export default function ResponsePanel() {
       )}
 
       {/* Body */}
-      {tab === 'response' ? (
-        <ResponseView
-          response={viewingSavedResponse ? viewingSavedResponse.response : response}
-          latestResult={viewingSavedResponse ? (viewingSavedResponse.activityResult ?? null) : latestResult}
-          waitingForResult={viewingSavedResponse ? false : waitingForResult}
-          waitingStartTime={viewingSavedResponse ? null : waitingStartTime}
-          isSending={viewingSavedResponse ? false : isSending}
-          isConnected={isConnected}
-          onCancelWaiting={cancelWaiting}
-        />
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {tab === 'request' && (
+          <RequestView
+            request={viewingSavedResponse ? viewingSavedResponse.request : currentRequest}
+            isConnected={isConnected}
+          />
+        )}
+        {tab === 'status' && (
+          <StatusView
+            response={viewingSavedResponse ? viewingSavedResponse.response : response}
+            responseTime={viewingSavedResponse ? (viewingSavedResponse.responseTime ?? null) : responseTime}
+            isSending={viewingSavedResponse ? false : isSending}
+            isConnected={isConnected}
+          />
+        )}
+        {tab === 'result' && (
+          <ResultView
+            activityResult={viewingSavedResponse ? (viewingSavedResponse.activityResult ?? null) : activityResult}
+            waitingForResult={viewingSavedResponse ? false : waitingForResult}
+            waitingStartTime={viewingSavedResponse ? null : waitingStartTime}
+            onCancelWaiting={cancelWaiting}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Request View ──────────────────────────────────────────────
+
+function RequestView({
+  request,
+  isConnected,
+}: {
+  request: IntentRequest | null;
+  isConnected: boolean;
+}) {
+  const colors = useColors();
+  return (
+    <div
+      style={{
+        flex: 1,
+        overflow: 'auto',
+        padding: '16px',
+        fontFamily: "'Liberation Mono', 'Consolas', 'Courier New', monospace",
+        fontSize: '13px',
+        lineHeight: '20px',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      }}
+    >
+      {request ? (
+        <JsonWithLineNumbers data={request} />
       ) : (
-        <NotificationsView
-          notifications={notifications}
-          onClear={clearNotifications}
-        />
+        <span style={{ color: colors.textMuted }}>
+          {isConnected
+            ? 'Send a request to see the request payload here'
+            : 'Connect to a device to get started'}
+        </span>
       )}
     </div>
   );
 }
 
-// ── Response View ─────────────────────────────────────────────
+// ── Status View ───────────────────────────────────────────────
 
-function ResponseView({
+function StatusView({
   response,
-  latestResult,
-  waitingForResult,
-  waitingStartTime,
+  responseTime,
   isSending,
   isConnected,
-  onCancelWaiting,
 }: {
-  response: ReturnType<typeof useTabStore.getState>['tabs'][0]['response'];
-  latestResult: Record<string, unknown> | null;
-  waitingForResult: boolean;
-  waitingStartTime: number | null;
+  response: JsonRpcResponse | null;
+  responseTime: number | null;
   isSending: boolean;
   isConnected: boolean;
-  onCancelWaiting: () => void;
 }) {
   const colors = useColors();
+  const hasError = response?.error;
+  const statusText = hasError
+    ? `Error ${response.error?.code || ''}`
+    : response
+    ? '200 OK'
+    : '';
+  const statusBg = hasError ? '#fee2e2' : response ? colors.successLight : 'transparent';
+  const statusColor = hasError ? colors.error : response ? colors.successDark : colors.textMuted;
+
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Waiting for Result banner */}
-      {waitingForResult && (
-        <WaitingBanner startTime={waitingStartTime} onCancel={onCancelWaiting} />
-      )}
-
-      {/* Latest Activity Result */}
-      {latestResult != null && !waitingForResult && (
-        <div
-          style={{
-            padding: '12px 16px',
-            background: colors.warning + '08',
-            borderBottom: `1px solid ${colors.warning}20`,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: colors.warning,
-              }}
-            />
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: colors.warning,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Activity Result
-            </span>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                color:
-                  (latestResult as Record<string, unknown>).resultCodeName === 'RESULT_OK'
-                    ? colors.successDark
-                    : colors.error,
-                padding: '2px 8px',
-                borderRadius: '2px',
-                background:
-                  (latestResult as Record<string, unknown>).resultCodeName === 'RESULT_OK'
-                    ? colors.successLight
-                    : '#fee2e2',
-              }}
-            >
-              {String((latestResult as Record<string, unknown>).resultCodeName || 'UNKNOWN')}
-            </span>
-          </div>
-          <div
-            style={{
-              background: colors.surface,
-              border: `1px solid ${colors.borderLight}`,
-              padding: '10px',
-              borderRadius: '4px',
-              fontFamily: "'Consolas', 'Courier New', monospace",
-              fontSize: '12px',
-              lineHeight: '1.5',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              color: colors.textSecondary,
-              maxHeight: '300px',
-              overflow: 'auto',
-            }}
-          >
-            <JsonTree data={latestResult} />
-          </div>
-        </div>
-      )}
-
-      {/* Regular Response with line numbers */}
+      {/* Response body */}
       <div
         style={{
           flex: 1,
@@ -533,13 +537,100 @@ function ResponseView({
           <JsonWithLineNumbers data={response} />
         ) : (
           <span style={{ color: colors.textMuted }}>
-            {isSending
-              ? ''
-              : isConnected
+            {isConnected
               ? 'Send a request to see the response here'
               : 'Connect to a device to get started'}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Result View ───────────────────────────────────────────────
+
+function ResultView({
+  activityResult,
+  waitingForResult,
+  waitingStartTime,
+  onCancelWaiting,
+}: {
+  activityResult: Record<string, unknown> | null;
+  waitingForResult: boolean;
+  waitingStartTime: number | null;
+  onCancelWaiting: () => void;
+}) {
+  const colors = useColors();
+  const resultCodeName = activityResult
+    ? String((activityResult as Record<string, unknown>).resultCodeName || 'UNKNOWN')
+    : '';
+  const resultCodeColor = resultCodeName === 'RESULT_OK' ? colors.successDark : colors.error;
+  const resultCodeBg = resultCodeName === 'RESULT_OK' ? colors.successLight : '#fee2e2';
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* Activity Result status bar */}
+      {activityResult != null && !waitingForResult && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderBottom: `1px solid ${colors.borderLight}`,
+          }}
+        >
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: colors.warning,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            Activity Result
+          </span>
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: resultCodeColor,
+              padding: '2px 8px',
+              borderRadius: '2px',
+              background: resultCodeBg,
+            }}
+          >
+            {resultCodeName}
+          </span>
+        </div>
+      )}
+
+      {/* Waiting for Result banner */}
+      {waitingForResult && (
+        <WaitingBanner startTime={waitingStartTime} onCancel={onCancelWaiting} />
+      )}
+
+      {/* Result body */}
+      <div
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '16px',
+          fontFamily: "'Liberation Mono', 'Consolas', 'Courier New', monospace",
+          fontSize: '13px',
+          lineHeight: '20px',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}
+      >
+        {activityResult != null && !waitingForResult ? (
+          <JsonWithLineNumbers data={activityResult} />
+        ) : !waitingForResult ? (
+          <span style={{ color: colors.textMuted }}>
+            No activity result yet. Send a forResult request to see the result here.
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -736,150 +827,4 @@ function formatTime(seconds: number): string {
   return `${m}m ${s}s`;
 }
 
-// ── Notifications View ────────────────────────────────────────
 
-function NotificationsView({
-  notifications,
-  onClear,
-}: {
-  notifications: Array<{ method: string; params?: Record<string, unknown> }>;
-  onClear: () => void;
-}) {
-  const colors = useColors();
-  return (
-    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Clear button */}
-      {notifications.length > 0 && (
-        <div
-          style={{
-            padding: '6px 12px',
-            borderBottom: `1px solid ${colors.borderLight}`,
-            display: 'flex',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <button
-            onClick={onClear}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textMuted,
-              fontSize: '10px',
-              cursor: 'pointer',
-            }}
-          >
-            Clear All
-          </button>
-        </div>
-      )}
-
-      {/* Notification list */}
-      {notifications.length === 0 ? (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <span style={{ fontSize: '12px', color: colors.textMuted }}>
-            No notifications yet. Activity results and broadcast events will appear here.
-          </span>
-        </div>
-      ) : (
-        notifications.map((n, i) => (
-          <div
-            key={i}
-            style={{
-              padding: '8px 12px',
-              borderBottom: `1px solid ${colors.borderLight}`,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: n.method === 'intent.result' ? colors.warning : colors.intentBroadcast,
-                  fontFamily: 'monospace',
-                }}
-              >
-                {n.method}
-              </span>
-            </div>
-            {n.params && (
-              <div
-                style={{
-                  marginTop: '4px',
-                  background: colors.surface,
-                  border: `1px solid ${colors.borderLight}`,
-                  padding: '6px 8px',
-                  borderRadius: '3px',
-                  fontFamily: 'monospace',
-                  fontSize: '11px',
-                  whiteSpace: 'pre-wrap',
-                  color: colors.textSecondary,
-                  maxHeight: '120px',
-                  overflow: 'auto',
-                }}
-              >
-                <JsonTree data={n.params} />
-              </div>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-// ── JSON Tree Renderer (fallback) ────────────────────────────
-
-function JsonTree({ data, indent = 0 }: { data: unknown; indent?: number }) {
-  const colors = useColors();
-  const pad = '  '.repeat(indent);
-
-  if (data === null) return <span style={{ color: colors.textMuted }}>null</span>;
-  if (data === undefined) return <span style={{ color: colors.textMuted }}>undefined</span>;
-
-  if (typeof data === 'string') {
-    return <span style={{ color: colors.codeString }}>"{data}"</span>;
-  }
-  if (typeof data === 'number') {
-    return <span style={{ color: colors.codeNumber }}>{data}</span>;
-  }
-  if (typeof data === 'boolean') {
-    return <span style={{ color: colors.codeBool }}>{String(data)}</span>;
-  }
-
-  if (Array.isArray(data)) {
-    if (data.length === 0) return <span>{'[]'}</span>;
-    return (
-      <span>
-        {'[\n'}
-        {data.map((item, i) => (
-          <span key={i}>
-            {pad}  <JsonTree data={item} indent={indent + 1} />
-            {i < data.length - 1 ? ',' : ''}
-            {'\n'}
-          </span>
-        ))}
-        {pad}{']'}
-      </span>
-    );
-  }
-
-  if (typeof data === 'object') {
-    const entries = Object.entries(data as Record<string, unknown>);
-    if (entries.length === 0) return <span>{'{}'}</span>;
-    return (
-      <span>
-        {'{\n'}
-        {entries.map(([key, value], i) => (
-          <span key={key}>
-            {pad}  <span style={{ color: colors.codeKey }}>"{key}"</span>: <JsonTree data={value} indent={indent + 1} />
-            {i < entries.length - 1 ? ',' : ''}
-            {'\n'}
-          </span>
-        ))}
-        {pad}{'}'}
-      </span>
-    );
-  }
-
-  return <span>{String(data)}</span>;
-}

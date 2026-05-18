@@ -10,6 +10,7 @@ import type {
 } from '../../shared/types';
 import { useNotificationStore } from './notificationStore';
 import { useCollectionsStore } from './collectionsStore';
+import { useSidebarStore } from './sidebarStore';
 
 interface TabState {
   tabs: RequestTab[];
@@ -37,6 +38,7 @@ interface TabState {
   setActiveTabResponse: (response: JsonRpcResponse, responseTime: number) => void;
   setActiveTabSending: (isSending: boolean) => void;
   cancelWaiting: () => void;
+  setActivityResult: (requestId: string, result: Record<string, unknown>) => void;
 
   // Save
   saveTab: (tabId?: string) => void;
@@ -87,6 +89,7 @@ function createNewTab(name?: string, request?: IntentRequest, savedRef?: { colle
     waitingForResult: false,
     waitingRequestId: null,
     waitingStartTime: null,
+    activityResult: null,
   };
 }
 
@@ -109,6 +112,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       tabs.splice(activeIndex + 1, 0, tab);
       return { tabs, activeTabId: tab.id };
     });
+    useSidebarStore.getState().setActiveTab('collections');
     return tab.id;
   },
 
@@ -174,6 +178,7 @@ export const useTabStore = create<TabState>((set, get) => ({
               waitingForResult: false,
               waitingRequestId: null,
               waitingStartTime: null,
+              activityResult: null,
               name: 'Untitled',
               savedRequestRef: null,
               savedResponseId: null,
@@ -261,6 +266,7 @@ export const useTabStore = create<TabState>((set, get) => ({
               waitingForResult: false,
               waitingRequestId: null,
               waitingStartTime: null,
+              activityResult: null,
             }
           : t
       ),
@@ -380,6 +386,22 @@ export const useTabStore = create<TabState>((set, get) => ({
     }));
   },
 
+  setActivityResult: (requestId: string, result: Record<string, unknown>) => {
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.waitingRequestId === requestId
+          ? {
+              ...t,
+              activityResult: result,
+              waitingForResult: false,
+              waitingRequestId: null,
+              waitingStartTime: null,
+            }
+          : t
+      ),
+    }));
+  },
+
   saveTab: (tabId) => {
     const id = tabId || get().activeTabId;
     const tab = get().tabs.find((t) => t.id === id);
@@ -464,6 +486,7 @@ export const useTabStore = create<TabState>((set, get) => ({
   loadRequest: (request) => {
     // Open in a new tab
     get().createTab(request.action || request.component || 'Untitled', request);
+    useSidebarStore.getState().setActiveTab('collections');
   },
 
   openSavedRequest: (collectionId, requestId, name, request) => {
@@ -475,6 +498,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     );
     if (existing) {
       set({ activeTabId: existing.id });
+      useSidebarStore.getState().setActiveTab('collections');
       return;
     }
     get().createTab(name, request, { collectionId, requestId });
@@ -485,6 +509,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     const existing = get().tabs.find((t) => t.savedResponseId === savedResponse.id);
     if (existing) {
       set({ activeTabId: existing.id });
+      useSidebarStore.getState().setActiveTab('collections');
       return;
     }
 
@@ -502,6 +527,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       waitingForResult: false,
       waitingRequestId: null,
       waitingStartTime: null,
+      activityResult: savedResponse.activityResult,
     };
     set((state) => {
       const activeIndex = state.tabs.findIndex((t) => t.id === state.activeTabId);
@@ -509,11 +535,6 @@ export const useTabStore = create<TabState>((set, get) => ({
       tabs.splice(activeIndex + 1, 0, tab);
       return { tabs, activeTabId: tab.id };
     });
-
-    // If there's an activityResult, push it to notification store so ResponsePanel shows it
-    if (savedResponse.activityResult) {
-      useNotificationStore.getState().clearLatestResult();
-      useNotificationStore.setState({ latestResult: savedResponse.activityResult });
-    }
+    useSidebarStore.getState().setActiveTab('collections');
   },
 }));

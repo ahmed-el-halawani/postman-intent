@@ -86,9 +86,13 @@ export default function App() {
         useServiceStore.getState().handleServiceDisconnected(notification.params);
       }
 
-      // Cancel waiting state on any tab when activity result arrives
-      if (notification.method === 'intent.result') {
-        useTabStore.getState().cancelWaiting();
+      // Route activity result to the correct tab by requestId
+      if (notification.method === 'intent.result' && notification.params) {
+        const params = notification.params as Record<string, unknown>;
+        const resultRequestId = params.requestId as string | undefined;
+        if (resultRequestId) {
+          useTabStore.getState().setActivityResult(resultRequestId, params);
+        }
       }
 
       // Always add to general notification store

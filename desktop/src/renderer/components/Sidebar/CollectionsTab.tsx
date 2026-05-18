@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCollectionsStore } from '../../store/collectionsStore';
 import { useTabStore } from '../../store/tabStore';
 import { useColors, useStyles } from '../../styles';
@@ -72,6 +72,18 @@ export default function CollectionsTab() {
   const [searchFilter, setSearchFilter] = useState('');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-expand collection containing active tab's saved request
+  const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const activeSavedRef = activeTab?.savedRequestRef;
+  useEffect(() => {
+    if (activeSavedRef) {
+      const { collectionId } = activeSavedRef;
+      if (!expandedIds.has(collectionId)) {
+        toggleExpanded(collectionId);
+      }
+    }
+  }, [activeSavedRef?.collectionId]);
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

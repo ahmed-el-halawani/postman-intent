@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useTabStore } from '../../store/tabStore';
 import { useCollectionsStore } from '../../store/collectionsStore';
+import { useNotificationStore } from '../../store/notificationStore';
+import { useSidebarStore } from '../../store/sidebarStore';
 import { useColors } from '../../styles';
 import type { IntentType, IntentRequest, HistoryEntry } from '../../../shared/types';
 import QuickActions from '../QuickActions/QuickActions';
 import CollectionsTab from './CollectionsTab';
+import NotificationsTab from './NotificationsTab';
 import ImportDialog from './ImportDialog';
 import CreateNewIntentDialog from './CreateNewIntentDialog';
 
-type Tab = 'quick' | 'history' | 'collections';
+type Tab = 'quick' | 'history' | 'collections' | 'notifications';
 
 const ICON_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -45,6 +48,16 @@ const ICON_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'notifications',
+    label: 'Notifications',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+  },
+  {
     id: 'collections' as Tab, // Placeholder "Flows" — maps to collections but acts as label only
     label: 'Flows',
     icon: (
@@ -56,11 +69,13 @@ const ICON_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function Sidebar() {
-  const [tab, setTab] = useState<Tab>('collections');
+  const tab = useSidebarStore((s) => s.activeTab);
+  const setTab = useSidebarStore((s) => s.setActiveTab);
   const [showImport, setShowImport] = useState(false);
   const [showNewIntent, setShowNewIntent] = useState(false);
   const { history, clearHistory, loadRequest } = useTabStore();
   const { createCollection } = useCollectionsStore();
+  const { notifications } = useNotificationStore();
   const colors = useColors();
 
   return (
@@ -91,8 +106,10 @@ export default function Sidebar() {
       >
         {ICON_TABS.map((item, idx) => {
           // Skip duplicate "Flows" entry for click handling
-          const isFlows = idx === 3;
+          const isFlows = idx === 4;
           const isActive = !isFlows && tab === item.id;
+          const isNotifications = item.id === 'notifications';
+          const hasUnread = isNotifications && notifications.length > 0;
 
           return (
             <button
@@ -111,10 +128,25 @@ export default function Sidebar() {
                 padding: '0',
                 color: isActive ? colors.iconActive : colors.sidebarTextDim,
                 opacity: isFlows ? 0.5 : 1,
+                position: 'relative',
               }}
             >
-              <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                 {item.icon}
+                {hasUnread && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '2px',
+                      right: '2px',
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: colors.accentOrange,
+                      border: `2px solid ${colors.sidebarBg}`,
+                    }}
+                  />
+                )}
               </div>
               <span
                 style={{
@@ -164,7 +196,7 @@ export default function Sidebar() {
                 letterSpacing: '-0.35px',
               }}
             >
-              {tab === 'collections' ? 'Collections' : tab === 'history' ? 'History' : 'Quick Actions'}
+              {tab === 'collections' ? 'Collections' : tab === 'history' ? 'History' : tab === 'notifications' ? 'Notifications' : 'Quick Actions'}
             </span>
           </div>
 
@@ -205,7 +237,7 @@ export default function Sidebar() {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {tab === 'quick' ? (
             <QuickActions />
           ) : tab === 'history' ? (
@@ -214,6 +246,8 @@ export default function Sidebar() {
               onLoad={loadRequest}
               onClear={clearHistory}
             />
+          ) : tab === 'notifications' ? (
+            <NotificationsTab />
           ) : (
             <CollectionsTab />
           )}

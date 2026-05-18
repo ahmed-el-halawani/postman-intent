@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabStore } from '../../store/tabStore';
+import { useSidebarStore } from '../../store/sidebarStore';
 import { useColors } from '../../styles';
 import type { IntentType } from '../../../shared/types';
 
@@ -11,6 +12,7 @@ const TYPE_ABBREV: Record<IntentType, string> = {
 
 export default function TabBar() {
   const { tabs, activeTabId, setActiveTab, createTab, requestCloseTab, renameTab } = useTabStore();
+  const setSidebarTab = useSidebarStore((s) => s.setActiveTab);
   const colors = useColors();
   const TYPE_COLORS: Record<IntentType, string> = {
     activity: colors.intentActivity,
@@ -75,7 +77,10 @@ export default function TabBar() {
           return (
             <div
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSidebarTab('collections');
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -216,7 +221,10 @@ export default function TabBar() {
 
       {/* New tab button — always pinned at end */}
       <button
-        onClick={() => createTab()}
+        onClick={() => {
+          createTab();
+          setSidebarTab('collections');
+        }}
         style={{
           background: 'transparent',
           border: 'none',

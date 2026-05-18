@@ -481,6 +481,7 @@ export default function IntentBuilder({ section = 'params' }: IntentBuilderProps
                 placeholder={row.description}
               />
               
+              
             </div>
           </div>
         ))}

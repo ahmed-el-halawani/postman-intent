@@ -146,6 +146,7 @@ export interface RequestTab {
   waitingForResult: boolean;
   waitingRequestId: string | null;
   waitingStartTime: number | null;
+  activityResult: Record<string, unknown> | null;
 }
 
 // ── Collections ──────────────────────────────────────────────
