@@ -5,9 +5,174 @@ import { useSidebarStore } from '../../store/sidebarStore';
 import { useColors, useStyles } from '../../styles';
 import { useDeviceStore } from '../../store/deviceStore';
 import type { SavedResponse, JsonRpcResponse, IntentRequest } from '../../../shared/types';
-import JsonTree from '../JsonTree';
+import SearchableJsonTree from '../SearchableJsonTree';
 
 type ResponseTab = 'request' | 'status' | 'result';
+type RequestViewMode = 'adb' | 'json';
+
+/* ── Adb Command Generator ─────────────────────────────────── */
+
+function generateAdbCommand(req: IntentRequest): string {
+  const parts: string[] = ['adb shell am'];
+
+  if (req.intentType === 'activity') {
+    parts.push(req.forResult ? 'start -f' : 'start');
+  } else if (req.intentType === 'broadcast') {
+    parts.push('broadcast');
+  } else if (req.intentType === 'service') {
+    parts.push('startservice');
+  }
+
+  if (req.action) parts.push(`-a ${req.action}`);
+  if (req.component) parts.push(`-n ${req.component}`);
+  if (req.data) parts.push(`-d "${req.data}"`);
+  if (req.mimeType) parts.push(`-t ${req.mimeType}`);
+
+  req.categories.forEach((cat) => parts.push(`-c ${cat}`));
+
+  req.extras.forEach((extra) => {
+    const { type, key, value } = extra;
+    switch (type) {
+      case 'string':
+        parts.push(`-e "${key}" "${value}"`);
+        break;
+      case 'int':
+        parts.push(`--ei "${key}" ${value}`);
+        break;
+      case 'long':
+        parts.push(`--el "${key}" ${value}`);
+        break;
+      case 'float':
+        parts.push(`--ef "${key}" ${value}`);
+        break;
+      case 'double':
+        parts.push(`--ed "${key}" ${value}`);
+        break;
+      case 'bool':
+        parts.push(`--ez "${key}" ${value}`);
+        break;
+      case 'uri':
+        parts.push(`--eu "${key}" ${value}`);
+        break;
+      case 'string_array':
+        parts.push(`-es "${key}" "${value}"`);
+        break;
+      case 'int_array':
+        parts.push(`--eia "${key}" ${value}`);
+        break;
+    }
+  });
+
+  // Format with line breaks for readability
+  const base = parts[0] + ' ' + parts[1];
+  const rest = parts.slice(2);
+  if (rest.length === 0) return base;
+  return base + ' \\\n  ' + rest.join(' \\\n  ');
+}
+
+/* ── Syntax-Colored Adb Command ────────────────────────────── */
+
+function AdbCommandView({ request }: { request: IntentRequest | null }) {
+  const colors = useColors();
+  if (!request) {
+    return (
+      <span style={{ color: colors.textMuted }}>
+        No request data available.
+      </span>
+    );
+  }
+
+  const cmd = generateAdbCommand(request);
+  const lines = cmd.split('\n');
+
+  return (
+    <div style={{ fontFamily: "'Consolas', 'Courier New', monospace", fontSize: '13px', lineHeight: '22px' }}>
+      {lines.map((line, i) => {
+        const tokens = tokenizeAdbLine(line, colors);
+        return (
+          <div key={i}>
+            {tokens.map((tok, j) => (
+              <span key={j} style={{ color: tok.color }}>{tok.text}</span>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function tokenizeAdbLine(line: string, colors: ReturnType<typeof useColors>): { text: string; color: string }[] {
+  // Simple tokenizer for adb command syntax coloring
+  const tokens: { text: string; color: string }[] = [];
+  let remaining = line;
+
+  while (remaining.length > 0) {
+    // Leading whitespace
+    const wsMatch = remaining.match(/^(\s+)/);
+    if (wsMatch) {
+      tokens.push({ text: wsMatch[1], color: colors.textMuted });
+      remaining = remaining.slice(wsMatch[0].length);
+      continue;
+    }
+
+    // Base command: adb shell am start/broadcast/startservice
+    const baseMatch = remaining.match(/^(adb shell am\s+(?:start(?:\s+-f)?|broadcast|startservice))/);
+    if (baseMatch) {
+      tokens.push({ text: baseMatch[1], color: colors.textMuted });
+      remaining = remaining.slice(baseMatch[0].length);
+      continue;
+    }
+
+    // Backslash at end of line
+    if (remaining.startsWith('\\')) {
+      tokens.push({ text: '\\', color: colors.textDim });
+      remaining = remaining.slice(1);
+      continue;
+    }
+
+    // Option flags: -a, -n, -d, -t, -c, -e, --ei, --el, --ef, --ed, --ez, --eu, --eia, -es
+    const flagMatch = remaining.match(/^(-[a-zA-Z]|-es|--e[a-z]{1,2})\s*/);
+    if (flagMatch) {
+      tokens.push({ text: flagMatch[1], color: colors.accentOrange });
+      remaining = remaining.slice(flagMatch[1].length);
+      continue;
+    }
+
+    // Quoted string
+    const strMatch = remaining.match(/^"([^"]*)"/);
+    if (strMatch) {
+      tokens.push({ text: '"', color: colors.codeGreen });
+      tokens.push({ text: strMatch[1], color: colors.codeGreen });
+      tokens.push({ text: '"', color: colors.codeGreen });
+      remaining = remaining.slice(strMatch[0].length);
+      continue;
+    }
+
+    // Component name (package/activity with dots)
+    const compMatch = remaining.match(/^([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+)/);
+    if (compMatch) {
+      tokens.push({ text: compMatch[1], color: colors.codeCyan });
+      remaining = remaining.slice(compMatch[0].length);
+      continue;
+    }
+
+    // Number
+    const numMatch = remaining.match(/^(-?\d+\.?\d*)/);
+    if (numMatch) {
+      tokens.push({ text: numMatch[1], color: colors.codeAmber });
+      remaining = remaining.slice(numMatch[0].length);
+      continue;
+    }
+
+    // Default: single char
+    tokens.push({ text: remaining[0], color: colors.textSecondary });
+    remaining = remaining.slice(1);
+  }
+
+  return tokens;
+}
+
+/* ── Main Component ────────────────────────────────────────── */
 
 export default function ResponsePanel() {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
@@ -20,8 +185,8 @@ export default function ResponsePanel() {
   const waitingStartTime = activeTab?.waitingStartTime ?? null;
   const savedRef = activeTab?.savedRequestRef ?? null;
   const currentRequest = activeTab?.request ?? null;
-
   const activityResult = activeTab?.activityResult ?? null;
+
   const collections = useCollectionsStore((s) => s.collections);
   const saveResponse = useCollectionsStore((s) => s.saveResponse);
   const deleteResponse = useCollectionsStore((s) => s.deleteResponse);
@@ -29,7 +194,9 @@ export default function ResponsePanel() {
   const isConnected = connectionStatus === 'connected';
   const colors = useColors();
   const { ghostButton } = useStyles();
+
   const [tab, setTab] = useState<ResponseTab>('status');
+  const [requestViewMode, setRequestViewMode] = useState<RequestViewMode>('adb');
   const [showSaveResponseInput, setShowSaveResponseInput] = useState(false);
   const [saveResponseName, setSaveResponseName] = useState('');
   const [showSavedResponses, setShowSavedResponses] = useState(false);
@@ -64,18 +231,65 @@ export default function ResponsePanel() {
     }
   }, [activityResult]);
 
-  const hasError = response?.error;
-  const statusText = hasError
-    ? `Error ${response.error?.code || ''}`
-    : response
-    ? '200 OK'
+  // Determine header status
+  const displayResponse = viewingSavedResponse ? viewingSavedResponse.response : response;
+  const displayResponseTime = viewingSavedResponse
+    ? (viewingSavedResponse.responseTime ?? null)
+    : responseTime;
+  const displayActivityResult = viewingSavedResponse
+    ? (viewingSavedResponse.activityResult ?? null)
+    : activityResult;
+  const displayIsSending = viewingSavedResponse ? false : isSending;
+  const displayRequest = viewingSavedResponse ? viewingSavedResponse.request : currentRequest;
+
+  const hasError = displayResponse?.error;
+  const resultCodeName = displayActivityResult
+    ? String(displayActivityResult.resultCodeName || 'UNKNOWN')
     : '';
-  const statusBg = hasError ? '#fee2e2' : response ? colors.successLight : 'transparent';
-  const statusColor = hasError ? colors.error : response ? colors.successDark : colors.textMuted;
+
+  let statusText = '';
+  let statusColor = colors.textMuted;
+  let statusBg = 'transparent';
+  let codeValue: number | string | null = null;
+
+  if (displayIsSending) {
+    statusText = 'Sending...';
+    statusColor = colors.warning;
+    statusBg = colors.warning + '15';
+  } else if (hasError) {
+    statusText = `Error ${displayResponse.error?.code || ''}`;
+    statusColor = colors.error;
+    statusBg = colors.error + '15';
+    codeValue = displayResponse.error?.code ?? null;
+  } else if (displayActivityResult) {
+    statusText = resultCodeName;
+    if (resultCodeName === 'RESULT_OK') {
+      statusColor = colors.success;
+      statusBg = colors.success + '15';
+    } else if (resultCodeName === 'RESULT_CANCELED') {
+      statusColor = colors.warning;
+      statusBg = colors.warning + '15';
+    } else {
+      statusColor = colors.error;
+      statusBg = colors.error + '15';
+    }
+    codeValue = typeof displayActivityResult.resultCode === 'number'
+      ? displayActivityResult.resultCode
+      : (resultCodeName === 'RESULT_OK' ? 0 : resultCodeName === 'RESULT_CANCELED' ? -1 : 0);
+  } else if (displayResponse) {
+    statusText = '200 OK';
+    statusColor = colors.success;
+    statusBg = colors.success + '15';
+    codeValue = 0;
+  }
+
+  const sizeText = displayResponse
+    ? `${(JSON.stringify(displayResponse).length / 1024).toFixed(1)} KB`
+    : null;
 
   const handleCopyResponse = () => {
-    if (response) {
-      navigator.clipboard.writeText(JSON.stringify(response, null, 2));
+    if (displayResponse) {
+      navigator.clipboard.writeText(JSON.stringify(displayResponse, null, 2));
     }
   };
 
@@ -89,30 +303,79 @@ export default function ResponsePanel() {
         background: colors.surfaceLight,
       }}
     >
-      {/* Header */}
+      {/* ── Header Strip ───────────────────────────────────── */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '8px 16px 9px',
+          padding: '8px 16px',
           borderBottom: `1px solid ${colors.borderLight}`,
+          background: colors.surface,
         }}
       >
-        {/* Response label */}
-        <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>
-          Response
-        </span>
+        {/* Left: Response label + Status Pill + Meta chips */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>
+            Response
+          </span>
 
-        {/* Right side actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {statusText && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: statusColor,
+                background: statusBg,
+                padding: '3px 10px',
+                borderRadius: '3px',
+                border: `1px solid ${statusColor}30`,
+              }}
+            >
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: statusColor,
+                  display: 'inline-block',
+                }}
+              />
+              {statusText}
+            </span>
+          )}
+
+          {displayResponseTime !== null && (
+            <span style={{ fontSize: '11px', color: colors.textDim }}>
+              Time: <span style={{ color: colors.text, fontWeight: 500 }}>{displayResponseTime}ms</span>
+            </span>
+          )}
+
+          {sizeText && (
+            <span style={{ fontSize: '11px', color: colors.textDim }}>
+              Size: <span style={{ color: colors.text, fontWeight: 500 }}>{sizeText}</span>
+            </span>
+          )}
+
+          {codeValue !== null && (
+            <span style={{ fontSize: '11px', color: colors.textDim }}>
+              Code: <span style={{ color: colors.text, fontWeight: 500 }}>{codeValue}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Right: Icon buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {/* Save Response button */}
-          {savedRef && response && !isSending && (
+          {savedRef && displayResponse && !displayIsSending && !viewingSavedResponse && (
             <button
               onClick={() => {
                 setSaveResponseName(
-                  response.error
-                    ? `Error ${response.error.code}`
+                  displayResponse.error
+                    ? `Error ${displayResponse.error.code}`
                     : `Response ${new Date().toLocaleTimeString()}`
                 );
                 setShowSaveResponseInput(true);
@@ -121,8 +384,18 @@ export default function ResponsePanel() {
                 ...ghostButton,
                 fontSize: '10px',
                 padding: '3px 8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
+              title="Save response"
             >
+              {/* Save icon (floppy disk) */}
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 2h5l3 3v5a1 1 0 01-1 1H2a1 1 0 01-1-1V3a1 1 0 011-1z" />
+                <path d="M6 1v4" />
+                <path d="M4 9h4" />
+              </svg>
               Save
             </button>
           )}
@@ -144,7 +417,7 @@ export default function ResponsePanel() {
           )}
 
           {/* Copy button */}
-          {response && (
+          {displayResponse && (
             <button
               onClick={handleCopyResponse}
               style={{
@@ -153,10 +426,12 @@ export default function ResponsePanel() {
                 cursor: 'pointer',
                 padding: '4px',
                 color: colors.textMuted,
+                display: 'inline-flex',
+                alignItems: 'center',
               }}
               title="Copy response"
             >
-              <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="4" y="1" width="8" height="10" rx="1" />
                 <path d="M1 4v9a1 1 0 001 1h7" />
               </svg>
@@ -165,57 +440,14 @@ export default function ResponsePanel() {
         </div>
       </div>
 
-      {/* Status bar — above tabs */}
-      {statusText && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '6px 16px',
-            borderBottom: `1px solid ${colors.borderLight}`,
-          }}
-        >
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 700,
-              color: statusColor,
-              background: statusBg,
-              padding: '2px 8px',
-              borderRadius: '2px',
-            }}
-          >
-            {statusText}
-          </span>
-          {responseTime !== null && (
-            <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
-              Time: <span style={{ color: colors.text }}>{responseTime} ms</span>
-            </span>
-          )}
-          {response && (
-            <span style={{ fontSize: '10px', fontWeight: 500, color: colors.textDim }}>
-              Size: <span style={{ color: colors.text }}>{(JSON.stringify(response).length / 1024).toFixed(1)} KB</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {isSending && !statusText && (
-        <div style={{ padding: '6px 16px', borderBottom: `1px solid ${colors.borderLight}` }}>
-          <span style={{ fontSize: '11px', color: colors.warning, fontWeight: 500 }}>
-            Sending...
-          </span>
-        </div>
-      )}
-
-      {/* Tab Bar */}
+      {/* ── Tab Bar ────────────────────────────────────────── */}
       <div
         style={{
           display: 'flex',
           gap: '24px',
           padding: '0 16px',
           borderBottom: `1px solid ${colors.borderLight}`,
+          background: colors.surface,
         }}
       >
         {([
@@ -249,8 +481,8 @@ export default function ResponsePanel() {
         })}
       </div>
 
-      {/* Save Response Name Input */}
-      {showSaveResponseInput && savedRef && response && (
+      {/* ── Save Response Name Input ───────────────────────── */}
+      {showSaveResponseInput && savedRef && displayResponse && (
         <div
           style={{
             padding: '8px 12px',
@@ -278,7 +510,15 @@ export default function ResponsePanel() {
             onChange={(e) => setSaveResponseName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && saveResponseName.trim() && currentRequest) {
-                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, activityResult);
+                saveResponse(
+                  savedRef.collectionId,
+                  savedRef.requestId,
+                  saveResponseName.trim(),
+                  currentRequest,
+                  displayResponse,
+                  displayResponseTime,
+                  displayActivityResult
+                );
                 setShowSaveResponseInput(false);
               }
               if (e.key === 'Escape') setShowSaveResponseInput(false);
@@ -287,7 +527,15 @@ export default function ResponsePanel() {
           <button
             onClick={() => {
               if (saveResponseName.trim() && currentRequest) {
-                saveResponse(savedRef.collectionId, savedRef.requestId, saveResponseName.trim(), currentRequest, response, responseTime, activityResult);
+                saveResponse(
+                  savedRef.collectionId,
+                  savedRef.requestId,
+                  saveResponseName.trim(),
+                  currentRequest,
+                  displayResponse,
+                  displayResponseTime,
+                  displayActivityResult
+                );
               }
               setShowSaveResponseInput(false);
             }}
@@ -321,7 +569,7 @@ export default function ResponsePanel() {
         </div>
       )}
 
-      {/* Saved Responses Dropdown */}
+      {/* ── Saved Responses Dropdown ───────────────────────── */}
       {showSavedResponses && savedResponses.length > 0 && savedRef && (
         <div
           style={{
@@ -400,7 +648,7 @@ export default function ResponsePanel() {
         </div>
       )}
 
-      {/* Viewing saved response banner */}
+      {/* ── Viewing saved response banner ──────────────────── */}
       {viewingSavedResponse && (
         <div
           style={{
@@ -430,25 +678,25 @@ export default function ResponsePanel() {
         </div>
       )}
 
-      {/* Body */}
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* ── Body ───────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {tab === 'request' && (
           <RequestView
-            request={viewingSavedResponse ? viewingSavedResponse.request : currentRequest}
+            request={displayRequest}
             isConnected={isConnected}
+            viewMode={requestViewMode}
+            onViewModeChange={setRequestViewMode}
           />
         )}
         {tab === 'status' && (
           <StatusView
-            response={viewingSavedResponse ? viewingSavedResponse.response : response}
-            responseTime={viewingSavedResponse ? (viewingSavedResponse.responseTime ?? null) : responseTime}
-            isSending={viewingSavedResponse ? false : isSending}
+            response={displayResponse}
             isConnected={isConnected}
           />
         )}
         {tab === 'result' && (
           <ResultView
-            activityResult={viewingSavedResponse ? (viewingSavedResponse.activityResult ?? null) : activityResult}
+            activityResult={displayActivityResult}
             waitingForResult={viewingSavedResponse ? false : waitingForResult}
             waitingStartTime={viewingSavedResponse ? null : waitingStartTime}
             onCancelWaiting={cancelWaiting}
@@ -459,86 +707,88 @@ export default function ResponsePanel() {
   );
 }
 
-// ── Request View ──────────────────────────────────────────────
+/* ── Request View ──────────────────────────────────────────── */
 
 function RequestView({
   request,
   isConnected,
+  viewMode,
+  onViewModeChange,
 }: {
   request: IntentRequest | null;
   isConnected: boolean;
+  viewMode: RequestViewMode;
+  onViewModeChange: (mode: RequestViewMode) => void;
 }) {
   const colors = useColors();
-  return (
-    <div
-      style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '16px',
-        fontFamily: "'Liberation Mono', 'Consolas', 'Courier New', monospace",
-        fontSize: '13px',
-        lineHeight: '20px',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      {request ? (
-        <JsonWithLineNumbers data={request} />
-      ) : (
-        <span style={{ color: colors.textMuted }}>
-          {isConnected
-            ? 'Send a request to see the request payload here'
-            : 'Connect to a device to get started'}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ── Status View ───────────────────────────────────────────────
-
-function StatusView({
-  response,
-  responseTime,
-  isSending,
-  isConnected,
-}: {
-  response: JsonRpcResponse | null;
-  responseTime: number | null;
-  isSending: boolean;
-  isConnected: boolean;
-}) {
-  const colors = useColors();
-  const hasError = response?.error;
-  const statusText = hasError
-    ? `Error ${response.error?.code || ''}`
-    : response
-    ? '200 OK'
-    : '';
-  const statusBg = hasError ? '#fee2e2' : response ? colors.successLight : 'transparent';
-  const statusColor = hasError ? colors.error : response ? colors.successDark : colors.textMuted;
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Response body */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Toggle */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 16px',
+          borderBottom: `1px solid ${colors.borderLight}`,
+          background: colors.surface,
+        }}
+      >
+        <button
+          onClick={() => onViewModeChange('adb')}
+          style={{
+            padding: '4px 10px',
+            background: viewMode === 'adb' ? colors.accentOrange + '15' : 'transparent',
+            color: viewMode === 'adb' ? colors.accentOrange : colors.textDim,
+            border: `1px solid ${viewMode === 'adb' ? colors.accentOrange : colors.border}`,
+            borderRadius: '3px',
+            fontSize: '11px',
+            fontWeight: viewMode === 'adb' ? 600 : 500,
+            cursor: 'pointer',
+          }}
+        >
+          adb command
+        </button>
+        <button
+          onClick={() => onViewModeChange('json')}
+          style={{
+            padding: '4px 10px',
+            background: viewMode === 'json' ? colors.accentOrange + '15' : 'transparent',
+            color: viewMode === 'json' ? colors.accentOrange : colors.textDim,
+            border: `1px solid ${viewMode === 'json' ? colors.accentOrange : colors.border}`,
+            borderRadius: '3px',
+            fontSize: '11px',
+            fontWeight: viewMode === 'json' ? 600 : 500,
+            cursor: 'pointer',
+          }}
+        >
+          raw JSON
+        </button>
+      </div>
+
+      {/* Content */}
       <div
         style={{
           flex: 1,
           overflow: 'auto',
           padding: '16px',
-          fontFamily: "'Liberation Mono', 'Consolas', 'Courier New', monospace",
+          background: colors.codeBg,
+          fontFamily: "'Consolas', 'Courier New', monospace",
           fontSize: '13px',
-          lineHeight: '20px',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
+          lineHeight: '22px',
         }}
       >
-        {response ? (
-          <JsonWithLineNumbers data={response} />
+        {request ? (
+          viewMode === 'adb' ? (
+            <AdbCommandView request={request} />
+          ) : (
+            <SearchableJsonTree data={request} />
+          )
         ) : (
           <span style={{ color: colors.textMuted }}>
             {isConnected
-              ? 'Send a request to see the response here'
+              ? 'Send a request to see the request payload here'
               : 'Connect to a device to get started'}
           </span>
         )}
@@ -547,7 +797,39 @@ function StatusView({
   );
 }
 
-// ── Result View ───────────────────────────────────────────────
+/* ── Status View ───────────────────────────────────────────── */
+
+function StatusView({
+  response,
+  isConnected,
+}: {
+  response: JsonRpcResponse | null;
+  isConnected: boolean;
+}) {
+  const colors = useColors();
+
+  if (!response) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '16px',
+          color: colors.textMuted,
+          fontSize: '13px',
+        }}
+      >
+        {isConnected
+          ? 'Send a request to see the response here'
+          : 'Connect to a device to get started'}
+      </div>
+    );
+  }
+
+  return <SearchableJsonTree data={response} />;
+}
+
+/* ── Result View ───────────────────────────────────────────── */
 
 function ResultView({
   activityResult,
@@ -562,13 +844,11 @@ function ResultView({
 }) {
   const colors = useColors();
   const resultCodeName = activityResult
-    ? String((activityResult as Record<string, unknown>).resultCodeName || 'UNKNOWN')
+    ? String(activityResult.resultCodeName || 'UNKNOWN')
     : '';
-  const resultCodeColor = resultCodeName === 'RESULT_OK' ? colors.successDark : colors.error;
-  const resultCodeBg = resultCodeName === 'RESULT_OK' ? colors.successLight : '#fee2e2';
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Activity Result status bar */}
       {activityResult != null && !waitingForResult && (
         <div
@@ -578,6 +858,7 @@ function ResultView({
             gap: '8px',
             padding: '8px 16px',
             borderBottom: `1px solid ${colors.borderLight}`,
+            background: colors.surface,
           }}
         >
           <span
@@ -595,10 +876,20 @@ function ResultView({
             style={{
               fontSize: '10px',
               fontWeight: 700,
-              color: resultCodeColor,
+              color:
+                resultCodeName === 'RESULT_OK'
+                  ? colors.success
+                  : resultCodeName === 'RESULT_CANCELED'
+                  ? colors.warning
+                  : colors.error,
               padding: '2px 8px',
               borderRadius: '2px',
-              background: resultCodeBg,
+              background:
+                resultCodeName === 'RESULT_OK'
+                  ? colors.success + '15'
+                  : resultCodeName === 'RESULT_CANCELED'
+                  ? colors.warning + '15'
+                  : colors.error + '15',
             }}
           >
             {resultCodeName}
@@ -612,113 +903,28 @@ function ResultView({
       )}
 
       {/* Result body */}
-      <div
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '16px',
-          fontFamily: "'Liberation Mono', 'Consolas', 'Courier New', monospace",
-          fontSize: '13px',
-          lineHeight: '20px',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
+      <div style={{ flex: 1, overflow: 'hidden' }}>
         {activityResult != null && !waitingForResult ? (
-          <JsonWithLineNumbers data={activityResult} />
+          <SearchableJsonTree data={activityResult} />
         ) : !waitingForResult ? (
-          <span style={{ color: colors.textMuted }}>
+          <div
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              padding: '16px',
+              color: colors.textMuted,
+              fontSize: '13px',
+            }}
+          >
             No activity result yet. Send a forResult request to see the result here.
-          </span>
+          </div>
         ) : null}
       </div>
     </div>
   );
 }
 
-// ── JSON with Line Numbers ────────────────────────────────────
-
-function JsonWithLineNumbers({ data }: { data: unknown }) {
-  const colors = useColors();
-  const jsonStr = JSON.stringify(data, null, 2);
-  const lines = jsonStr.split('\n');
-
-  return (
-    <div style={{ display: 'flex', gap: '16px' }}>
-      {/* Line numbers gutter */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '32px', userSelect: 'none' }}>
-        {lines.map((_, i) => (
-          <span key={i} style={{ color: colors.textMuted, fontSize: '13px', lineHeight: '20px' }}>
-            {i + 1}
-          </span>
-        ))}
-      </div>
-
-      {/* Code content */}
-      <div style={{ flex: 1 }}>
-        {lines.map((line, i) => (
-          <div key={i} style={{ lineHeight: '20px' }}>
-            <SyntaxHighlightedLine line={line} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SyntaxHighlightedLine({ line }: { line: string }) {
-  const colors = useColors();
-  // Simple regex-based syntax highlighting
-  const parts: React.ReactNode[] = [];
-  let remaining = line;
-  let keyIdx = 0;
-
-  while (remaining.length > 0) {
-    // Match quoted key before colon: "key":
-    const keyMatch = remaining.match(/^(\s*)"([^"]+)"(\s*:\s*)/);
-    if (keyMatch) {
-      parts.push(<span key={keyIdx++}>{keyMatch[1]}"</span>);
-      parts.push(<span key={keyIdx++} style={{ color: colors.codeKey }}>{keyMatch[2]}</span>);
-      parts.push(<span key={keyIdx++}>"{ keyMatch[3]}</span>);
-      remaining = remaining.slice(keyMatch[0].length);
-      continue;
-    }
-
-    // Match string value: "value"
-    const strMatch = remaining.match(/^"([^"]*)"/);
-    if (strMatch) {
-      parts.push(<span key={keyIdx++}>"</span>);
-      parts.push(<span key={keyIdx++} style={{ color: colors.codeString }}>{strMatch[1]}</span>);
-      parts.push(<span key={keyIdx++}>"</span>);
-      remaining = remaining.slice(strMatch[0].length);
-      continue;
-    }
-
-    // Match number
-    const numMatch = remaining.match(/^(-?\d+\.?\d*)/);
-    if (numMatch) {
-      parts.push(<span key={keyIdx++} style={{ color: colors.codeNumber }}>{numMatch[1]}</span>);
-      remaining = remaining.slice(numMatch[0].length);
-      continue;
-    }
-
-    // Match boolean/null
-    const boolMatch = remaining.match(/^(true|false|null)/);
-    if (boolMatch) {
-      parts.push(<span key={keyIdx++} style={{ color: colors.codeBool }}>{boolMatch[1]}</span>);
-      remaining = remaining.slice(boolMatch[0].length);
-      continue;
-    }
-
-    // Default: single character
-    parts.push(<span key={keyIdx++} style={{ color: colors.textSecondary }}>{remaining[0]}</span>);
-    remaining = remaining.slice(1);
-  }
-
-  return <>{parts}</>;
-}
-
-// ── Waiting Banner with animation ─────────────────────────────
+/* ── Waiting Banner with animation ─────────────────────────── */
 
 function WaitingBanner({
   startTime,
@@ -826,5 +1032,3 @@ function formatTime(seconds: number): string {
   const s = seconds % 60;
   return `${m}m ${s}s`;
 }
-
-

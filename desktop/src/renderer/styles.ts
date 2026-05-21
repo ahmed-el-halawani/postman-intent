@@ -36,6 +36,13 @@ const lightPalette = {
   codeNumber: '#0369a1',
   codeBool: '#dc2626',
 
+  // New syntax colors (light)
+  codeCyan: '#0891b2',
+  codeGreen: '#059669',
+  codeAmber: '#d97706',
+  codePink: '#db2777',
+  codePurple: '#7c3aed',
+
   white: '#ffffff',
 
   // Sidebar
@@ -86,6 +93,13 @@ const darkPalette = {
   codeString: '#6a9955',
   codeNumber: '#4fc1ff',
   codeBool: '#f44747',
+
+  // New syntax colors (dark)
+  codeCyan: '#22d3ee',
+  codeGreen: '#4ade80',
+  codeAmber: '#fbbf24',
+  codePink: '#f472b6',
+  codePurple: '#a78bfa',
 
   white: '#ffffff',
 
