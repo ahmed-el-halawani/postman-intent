@@ -62,47 +62,6 @@ function valueToString(value: unknown): string {
   return String(value);
 }
 
-function getValueAtPath(data: unknown, path: string): unknown {
-  if (!path) return data;
-  let current: unknown = data;
-  // Split path by dots, but preserve array indices like foo[0]
-  const tokens: string[] = [];
-  let remaining = path;
-  while (remaining) {
-    const dotIdx = remaining.indexOf('.');
-    const bracketIdx = remaining.indexOf('[');
-    if (dotIdx === -1 && bracketIdx === -1) {
-      tokens.push(remaining);
-      break;
-    }
-    if (dotIdx !== -1 && (bracketIdx === -1 || dotIdx < bracketIdx)) {
-      tokens.push(remaining.slice(0, dotIdx));
-      remaining = remaining.slice(dotIdx + 1);
-    } else {
-      tokens.push(remaining.slice(0, bracketIdx));
-      remaining = remaining.slice(bracketIdx);
-      const closeIdx = remaining.indexOf(']');
-      if (closeIdx !== -1) {
-        tokens.push(remaining.slice(1, closeIdx));
-        remaining = remaining.slice(closeIdx + 1);
-        if (remaining.startsWith('.')) remaining = remaining.slice(1);
-      }
-    }
-  }
-
-  for (const token of tokens) {
-    if (current === null || current === undefined) return undefined;
-    if (Array.isArray(current)) {
-      current = current[Number(token)];
-    } else if (typeof current === 'object') {
-      current = (current as Record<string, unknown>)[token];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
-}
-
 function collectAllPaths(value: unknown, prefix = ''): string[] {
   const paths: string[] = [];
   if (Array.isArray(value)) {
@@ -184,8 +143,6 @@ function JsonNode({
   isLast,
   expandedPaths,
   togglePath,
-  expandedStrings,
-  toggleString,
   pattern,
   matchMap,
   activeMatchIndex,
@@ -197,8 +154,6 @@ function JsonNode({
   isLast?: boolean;
   expandedPaths: Set<string>;
   togglePath: (p: string) => void;
-  expandedStrings: Set<string>;
-  toggleString: (p: string) => void;
   pattern: RegExp | null;
   matchMap: Map<string, number[]>;
   activeMatchIndex: number;
@@ -271,39 +226,27 @@ function JsonNode({
   const renderPrimitive = () => {
     if (type === 'string') {
       const str = data as string;
-      const isExpanded = expandedStrings.has(path);
-      const isTruncated = str.length > 120 && !isExpanded;
-      const displayStr = isTruncated ? str.slice(0, 120) : str;
       const isValueMatch = pattern ? pattern.test(str) : false;
       const isActiveMatch = matchesAtPath.includes(activeMatchIndex) && isValueMatch;
-      const canToggle = str.length > 120;
 
       return (
         <span
           ref={(el) => { if (el && isValueMatch) { const mi = matchMap.get(path)?.find((i) => i === activeMatchIndex); if (mi !== undefined) matchRefs.current.set(mi, el); }}}
         >
           <span
-            onClick={canToggle ? () => toggleString(path) : undefined}
             style={{
               color: colors.codeGreen,
-              cursor: canToggle ? 'pointer' : 'default',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word',
             }}
-            title={canToggle ? (isExpanded ? 'Click to collapse' : 'Click to expand') : undefined}
           >
             {pattern && isValueMatch ? (
-              <HighlightText text={`"${displayStr}"`} pattern={pattern} isActive={isActiveMatch} />
+              <HighlightText text={`"${str}"`} pattern={pattern} isActive={isActiveMatch} />
             ) : (
-              `"${displayStr}"`
+              `"${str}"`
             )}
           </span>
-          {isTruncated && (
-            <span
-              onClick={() => toggleString(path)}
-              style={{ color: colors.accentOrange, cursor: 'pointer', fontSize: '11px', marginLeft: '4px' }}
-            >
-              ... show {str.length - 120} more
-            </span>
-          )}
         </span>
       );
     }
@@ -398,8 +341,6 @@ function JsonNode({
                   isLast={i === data.length - 1}
                   expandedPaths={expandedPaths}
                   togglePath={togglePath}
-                  expandedStrings={expandedStrings}
-                  toggleString={toggleString}
                   pattern={pattern}
                   matchMap={matchMap}
                   activeMatchIndex={activeMatchIndex}
@@ -416,8 +357,6 @@ function JsonNode({
                   isLast={i === arr.length - 1}
                   expandedPaths={expandedPaths}
                   togglePath={togglePath}
-                  expandedStrings={expandedStrings}
-                  toggleString={toggleString}
                   pattern={pattern}
                   matchMap={matchMap}
                   activeMatchIndex={activeMatchIndex}
@@ -457,7 +396,6 @@ export default function SearchableJsonTree({ data }: { data: unknown }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isRegex, setIsRegex] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-  const [expandedStrings, setExpandedStrings] = useState<Set<string>>(new Set());
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const matchRefs = useRef<Map<number, HTMLSpanElement>>(new Map());
@@ -515,28 +453,9 @@ export default function SearchableJsonTree({ data }: { data: unknown }) {
     return { matchList: matches, matchMap: map };
   }, [cleanData, pattern]);
 
-  // Auto-expand paths and truncated strings that contain matches
+  // Auto-expand paths that contain matches
   useEffect(() => {
     matchRefs.current.clear();
-
-    // Auto-expand truncated strings that contain matches
-    const stringsToExpand = new Set<string>();
-    matchList.forEach((m) => {
-      if (m.type === 'value') {
-        const val = getValueAtPath(cleanData, m.path);
-        if (typeof val === 'string' && val.length > 120) {
-          stringsToExpand.add(m.path);
-        }
-      }
-    });
-    if (stringsToExpand.size > 0) {
-      setExpandedStrings((prev) => {
-        const next = new Set(prev);
-        stringsToExpand.forEach((p) => next.add(p));
-        return next;
-      });
-    }
-
     if (matchList.length === 0) {
       setActiveMatchIndex(0);
       return;
@@ -547,7 +466,7 @@ export default function SearchableJsonTree({ data }: { data: unknown }) {
       return next;
     });
     setActiveMatchIndex(0);
-  }, [matchList, cleanData]);
+  }, [matchList]);
 
   // Scroll active match into view
   useEffect(() => {
@@ -582,15 +501,6 @@ export default function SearchableJsonTree({ data }: { data: unknown }) {
 
   const togglePath = useCallback((path: string) => {
     setExpandedPaths((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  }, []);
-
-  const toggleString = useCallback((path: string) => {
-    setExpandedStrings((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -660,15 +570,13 @@ export default function SearchableJsonTree({ data }: { data: unknown }) {
         <JsonNode
           path=""
           data={cleanData}
-          expandedPaths={expandedPaths}
-          togglePath={togglePath}
-          expandedStrings={expandedStrings}
-          toggleString={toggleString}
-          pattern={pattern}
-          matchMap={matchMap}
-          activeMatchIndex={activeMatchIndex}
-          matchRefs={matchRefs}
-        />
+                  expandedPaths={expandedPaths}
+                  togglePath={togglePath}
+                  pattern={pattern}
+                  matchMap={matchMap}
+                  activeMatchIndex={activeMatchIndex}
+                  matchRefs={matchRefs}
+                />
       </div>
     </div>
   );
