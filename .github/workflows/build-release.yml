@@ -114,7 +114,7 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
 
       - name: Install desktop dependencies
-        run: cd desktop && npm ci
+        run: cd desktop && npm install
 
       - name: Build desktop app
         run: cd desktop && npm run make
