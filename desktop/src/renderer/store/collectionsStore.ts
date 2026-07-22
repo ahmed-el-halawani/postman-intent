@@ -427,6 +427,17 @@ export const useCollectionsStore = create<CollectionsState>((set, get) => ({
               key: e.key || '',
               type: e.type || 'string',
               value: e.value || '',
+              enabled: e.enabled ?? true,
+              subExtras: (e.subExtras || []).map(function mapSub(s: any) {
+                return {
+                  id: uuidv4(),
+                  key: s.key || '',
+                  type: s.type || 'string',
+                  value: s.value || '',
+                  enabled: s.enabled ?? true,
+                  subExtras: (s.subExtras || []).map(mapSub),
+                };
+              }),
             })),
             forResult: r.request?.forResult || false,
           },

@@ -38,7 +38,7 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 // IPC API exposed to renderer via preload
 export interface IntentPostmanAPI {
   listDevices: () => Promise<Device[]>;
-  connectDevice: (serial: string) => Promise<{ success: boolean; error?: string; needsInstall?: boolean }>;
+  connectDevice: (serial: string) => Promise<{ success: boolean; error?: string; needsInstall?: boolean; needsUpgrade?: boolean; installedVersion?: string; expectedVersion?: string }>;
   installAndConnectDevice: (serial: string) => Promise<{ success: boolean; error?: string }>;
   disconnectDevice: () => Promise<void>;
   sendCommand: (method: string, params: Record<string, unknown>) => Promise<JsonRpcResponse>;
@@ -62,13 +62,16 @@ export type ExtraType =
   | 'bool'
   | 'uri'
   | 'string_array'
-  | 'int_array';
+  | 'int_array'
+  | 'bundle';
 
 export interface IntentExtra {
   id: string;
   key: string;
   type: ExtraType;
   value: string;
+  enabled: boolean;
+  subExtras: IntentExtra[];
 }
 
 export const INTENT_FLAGS = [

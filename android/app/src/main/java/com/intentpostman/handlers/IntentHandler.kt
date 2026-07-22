@@ -247,13 +247,13 @@ class IntentHandler(
             val key = extra.get("key")?.asString ?: return@forEach
             val type = extra.get("type")?.asString ?: "string"
             val value = extra.get("value") ?: return@forEach
-            putExtra(intent, key, type, value)
+            putExtra(intent, key, type, value, extra)
         }
 
         return intent
     }
 
-    private fun putExtra(intent: Intent, key: String, type: String, value: JsonElement) {
+    private fun putExtra(intent: Intent, key: String, type: String, value: JsonElement, extraObj: JsonObject? = null) {
         try {
             when (type) {
                 "string" -> intent.putExtra(key, value.asString)
@@ -283,6 +283,62 @@ class IntentHandler(
                             value.asString.split(",").map { it.trim().toInt() }.toIntArray()
                         )
                     }
+                }
+
+                "bundle" -> {
+                    val bundle = Bundle()
+                    extraObj?.getAsJsonArray("subExtras")?.forEach { subEl ->
+                        val sub = subEl.asJsonObject
+                        val subKey = sub.get("key")?.asString ?: return@forEach
+                        val subType = sub.get("type")?.asString ?: "string"
+                        val subValue = sub.get("value") ?: return@forEach
+                        putBundleExtra(bundle, subKey, subType, subValue, sub)
+                    }
+                    intent.putExtra(key, bundle)
+                }
+            }
+        } catch (e: Exception) {
+            throw JsonRpcException(
+                -32602,
+                "Invalid extra value for key '$key' (type=$type): ${e.message}"
+            )
+        }
+    }
+
+    private fun putBundleExtra(bundle: Bundle, key: String, type: String, value: JsonElement, extraObj: JsonObject? = null) {
+        try {
+            when (type) {
+                "string" -> bundle.putString(key, value.asString)
+                "int" -> bundle.putInt(key, value.asString.toInt())
+                "long" -> bundle.putLong(key, value.asString.toLong())
+                "float" -> bundle.putFloat(key, value.asString.toFloat())
+                "double" -> bundle.putDouble(key, value.asString.toDouble())
+                "bool" -> bundle.putBoolean(key, value.asString.toBooleanStrict())
+                "uri" -> bundle.putParcelable(key, Uri.parse(value.asString))
+                "string_array" -> {
+                    if (value.isJsonArray) {
+                        bundle.putStringArray(key, value.asJsonArray.map { it.asString }.toTypedArray())
+                    } else {
+                        bundle.putStringArray(key, value.asString.split(",").map { it.trim() }.toTypedArray())
+                    }
+                }
+                "int_array" -> {
+                    if (value.isJsonArray) {
+                        bundle.putIntArray(key, value.asJsonArray.map { it.asInt }.toIntArray())
+                    } else {
+                        bundle.putIntArray(key, value.asString.split(",").map { it.trim().toInt() }.toIntArray())
+                    }
+                }
+                "bundle" -> {
+                    val subBundle = Bundle()
+                    extraObj?.getAsJsonArray("subExtras")?.forEach { subEl ->
+                        val sub = subEl.asJsonObject
+                        val subKey = sub.get("key")?.asString ?: return@forEach
+                        val subType = sub.get("type")?.asString ?: "string"
+                        val subValue = sub.get("value") ?: return@forEach
+                        putBundleExtra(subBundle, subKey, subType, subValue, sub)
+                    }
+                    bundle.putBundle(key, subBundle)
                 }
             }
         } catch (e: Exception) {

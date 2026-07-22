@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { listDevices, trackDevices, openTcpConnection, launchApp, isAppInstalled, installApk } from './adb';
+import { listDevices, trackDevices, openTcpConnection, launchApp, isAppInstalled, getInstalledAppVersion, installApk } from './adb';
 import { CommandSocket } from './socket';
 import type { ConnectionStatus, CollectionsData } from '../shared/types';
 
@@ -54,6 +54,9 @@ const createWindow = () => {
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
+// Expected app version — read from desktop package.json
+const expectedAppVersion = app.getVersion();
+
 // ── IPC Handlers ──────────────────────────────────────────────
 
 ipcMain.handle('devices:list', async () => {
@@ -79,6 +82,13 @@ ipcMain.handle('devices:connect', async (_event, serial: string) => {
     if (!installed) {
       setConnectionStatus('disconnected');
       return { success: false, needsInstall: true };
+    }
+
+    // Check installed app version — require upgrade if outdated
+    const installedVersion = await getInstalledAppVersion(serial);
+    if (installedVersion && expectedAppVersion && installedVersion !== expectedAppVersion) {
+      setConnectionStatus('disconnected');
+      return { success: false, needsUpgrade: true, installedVersion, expectedVersion: expectedAppVersion };
     }
 
     // Launch the Android app

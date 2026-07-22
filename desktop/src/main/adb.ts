@@ -109,6 +109,24 @@ export async function isAppInstalled(serial: string): Promise<boolean> {
 }
 
 /**
+ * Get the installed app's versionName via ADB shell.
+ * Returns null if not installed or version not found.
+ */
+export async function getInstalledAppVersion(serial: string): Promise<string | null> {
+  try {
+    const stream = await client.shell(
+      serial,
+      'dumpsys package com.intentpostman | grep versionName'
+    );
+    const output = await readStream(stream);
+    const match = output.match(/versionName=(\S+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Install an APK on the device via ADB.
  */
 export async function installApk(serial: string, apkPath: string): Promise<void> {

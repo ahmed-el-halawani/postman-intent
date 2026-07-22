@@ -6,6 +6,8 @@ interface DeviceState {
   selectedSerial: string;
   connectionStatus: ConnectionStatus;
   needsInstall: boolean;
+  needsUpgrade: boolean;
+  upgradeInfo: { installedVersion?: string; expectedVersion?: string } | null;
 
   setDevices: (devices: Device[]) => void;
   setSelectedSerial: (serial: string) => void;
@@ -15,6 +17,7 @@ interface DeviceState {
   connect: (serial?: string) => Promise<{ success: boolean; error?: string }>;
   installAndConnect: () => Promise<{ success: boolean; error?: string }>;
   dismissInstall: () => void;
+  dismissUpgrade: () => void;
   disconnect: () => Promise<void>;
 }
 
@@ -23,6 +26,8 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   selectedSerial: '',
   connectionStatus: 'disconnected',
   needsInstall: false,
+  needsUpgrade: false,
+  upgradeInfo: null,
 
   setDevices: (devices) => {
     const { connectionStatus, selectedSerial } = get();
@@ -65,27 +70,33 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   connect: async (serial) => {
     const selectedSerial = serial || get().selectedSerial;
     if (!selectedSerial) return { success: false, error: 'No device selected' };
-    set({ needsInstall: false });
+    set({ needsInstall: false, needsUpgrade: false, upgradeInfo: null });
     const result = await window.intentPostman.connectDevice(selectedSerial);
     if (result.needsInstall) {
       set({ needsInstall: true });
+    } else if (result.needsUpgrade) {
+      set({ needsUpgrade: true, upgradeInfo: { installedVersion: result.installedVersion, expectedVersion: result.expectedVersion } });
     }
     return result;
   },
 
   disconnect: async () => {
-    set({ needsInstall: false });
+    set({ needsInstall: false, needsUpgrade: false, upgradeInfo: null });
     await window.intentPostman.disconnectDevice();
   },
 
   installAndConnect: async () => {
     const { selectedSerial } = get();
     if (!selectedSerial) return { success: false, error: 'No device selected' };
-    set({ needsInstall: false });
+    set({ needsInstall: false, needsUpgrade: false, upgradeInfo: null });
     return await window.intentPostman.installAndConnectDevice(selectedSerial);
   },
 
   dismissInstall: () => {
     set({ needsInstall: false, connectionStatus: 'disconnected' });
+  },
+
+  dismissUpgrade: () => {
+    set({ needsUpgrade: false, upgradeInfo: null, connectionStatus: 'disconnected' });
   },
 }));

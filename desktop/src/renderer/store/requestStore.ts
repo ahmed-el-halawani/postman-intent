@@ -76,7 +76,7 @@ export const useRequestStore = create<RequestState>((set, get) => ({
         ...state.request,
         extras: [
           ...state.request.extras,
-          { id: uuidv4(), key: '', type: 'string', value: '' },
+          { id: uuidv4(), key: '', type: 'string', value: '', enabled: true, subExtras: [] },
         ],
       },
     })),

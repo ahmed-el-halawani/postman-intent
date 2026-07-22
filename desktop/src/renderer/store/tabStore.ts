@@ -29,7 +29,7 @@ interface TabState {
   resetRequest: () => void;
 
   // Extras helpers
-  addExtra: () => void;
+  addExtra: (parentId?: string) => void;
   updateExtra: (id: string, partial: Partial<IntentExtra>) => void;
   removeExtra: (id: string) => void;
 
@@ -75,11 +75,62 @@ const defaultRequest: IntentRequest = {
   descriptions: {},
 };
 
+function makeExtra(partial?: Partial<IntentExtra>): IntentExtra {
+  return { id: uuidv4(), key: '', type: 'string', value: '', enabled: true, subExtras: [], ...partial };
+}
+
+function migrateExtra(e: any): IntentExtra {
+  return {
+    id: e.id || uuidv4(),
+    key: e.key || '',
+    type: e.type || 'string',
+    value: e.value || '',
+    enabled: e.enabled ?? true,
+    subExtras: (e.subExtras || []).map(migrateExtra),
+  };
+}
+
+function migrateExtras(extras: any[]): IntentExtra[] {
+  return (extras || []).map(migrateExtra);
+}
+
+function serializeExtras(extras: IntentExtra[]) {
+  return extras
+    .filter((e) => e.enabled && e.key)
+    .map((e) => {
+      const o: Record<string, unknown> = { key: e.key, type: e.type, value: e.value };
+      if (e.type === 'bundle') o.subExtras = serializeExtras(e.subExtras);
+      return o;
+    });
+}
+
+function updateExtraRecursive(extras: IntentExtra[], id: string, partial: Partial<IntentExtra>): IntentExtra[] {
+  return extras.map((e) => {
+    if (e.id === id) return { ...e, ...partial };
+    if (e.subExtras.length > 0) return { ...e, subExtras: updateExtraRecursive(e.subExtras, id, partial) };
+    return e;
+  });
+}
+
+function removeExtraRecursive(extras: IntentExtra[], id: string): IntentExtra[] {
+  return extras
+    .filter((e) => e.id !== id)
+    .map((e) => e.subExtras.length > 0 ? { ...e, subExtras: removeExtraRecursive(e.subExtras, id) } : e);
+}
+
+function addSubExtraRecursive(extras: IntentExtra[], parentId: string, newExtra: IntentExtra): IntentExtra[] {
+  return extras.map((e) => {
+    if (e.id === parentId) return { ...e, subExtras: [...e.subExtras, newExtra] };
+    if (e.subExtras.length > 0) return { ...e, subExtras: addSubExtraRecursive(e.subExtras, parentId, newExtra) };
+    return e;
+  });
+}
+
 function createNewTab(name?: string, request?: IntentRequest, savedRef?: { collectionId: string; requestId: string }): RequestTab {
   return {
     id: uuidv4(),
     name: name || 'Untitled',
-    request: request ? { ...request } : { ...defaultRequest },
+    request: request ? { ...request, extras: migrateExtras(request.extras as any) } : { ...defaultRequest },
     savedRequestRef: savedRef || null,
     savedResponseId: null,
     isDirty: false,
@@ -188,7 +239,8 @@ export const useTabStore = create<TabState>((set, get) => ({
     }));
   },
 
-  addExtra: () => {
+  addExtra: (parentId) => {
+    const newExtra = makeExtra();
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === state.activeTabId
@@ -197,10 +249,9 @@ export const useTabStore = create<TabState>((set, get) => ({
               isDirty: true,
               request: {
                 ...t.request,
-                extras: [
-                  ...t.request.extras,
-                  { id: uuidv4(), key: '', type: 'string' as const, value: '' },
-                ],
+                extras: parentId
+                  ? addSubExtraRecursive(t.request.extras, parentId, newExtra)
+                  : [...t.request.extras, newExtra],
               },
             }
           : t
@@ -217,9 +268,7 @@ export const useTabStore = create<TabState>((set, get) => ({
               isDirty: true,
               request: {
                 ...t.request,
-                extras: t.request.extras.map((e) =>
-                  e.id === id ? { ...e, ...partial } : e
-                ),
+                extras: updateExtraRecursive(t.request.extras, id, partial),
               },
             }
           : t
@@ -236,7 +285,7 @@ export const useTabStore = create<TabState>((set, get) => ({
               isDirty: true,
               request: {
                 ...t.request,
-                extras: t.request.extras.filter((e) => e.id !== id),
+                extras: removeExtraRecursive(t.request.extras, id),
               },
             }
           : t
@@ -283,9 +332,8 @@ export const useTabStore = create<TabState>((set, get) => ({
     if (request.flags.length > 0) params.flags = request.flags;
     if (request.forResult) params.forResult = true;
     if (request.extras.length > 0) {
-      params.extras = request.extras
-        .filter((e) => e.key)
-        .map((e) => ({ key: e.key, type: e.type, value: e.value }));
+      const serialized = serializeExtras(request.extras);
+      if (serialized.length > 0) params.extras = serialized;
     }
 
     const start = performance.now();
@@ -517,7 +565,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     const tab: RequestTab = {
       id: uuidv4(),
       name: `${savedResponse.name}`,
-      request: { ...savedResponse.request },
+      request: { ...savedResponse.request, extras: migrateExtras(savedResponse.request.extras as any) },
       savedRequestRef: null,
       savedResponseId: savedResponse.id,
       isDirty: false,

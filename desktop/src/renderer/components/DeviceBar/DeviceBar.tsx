@@ -9,12 +9,15 @@ export default function DeviceBar() {
     selectedSerial,
     connectionStatus,
     needsInstall,
+    needsUpgrade,
+    upgradeInfo,
     setSelectedSerial,
     refreshDevices,
     connect,
     disconnect,
     installAndConnect,
     dismissInstall,
+    dismissUpgrade,
   } = useDeviceStore();
 
   const colors = useColors();
@@ -306,6 +309,73 @@ export default function DeviceBar() {
                 onClick={installAndConnect}
               >
                 Install
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {needsUpgrade && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: colors.surface,
+              border: `1px solid ${colors.border}`,
+              borderRadius: '8px',
+              padding: '24px 32px',
+              maxWidth: '420px',
+              width: '90%',
+              textAlign: 'center',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            }}
+          >
+            <div style={{ fontSize: '18px', fontWeight: 700, color: colors.accentOrange, marginBottom: '12px' }}>
+              Update Required
+            </div>
+            <div style={{ fontSize: '13px', color: colors.textSecondary, lineHeight: 1.5, marginBottom: '8px' }}>
+              The Intent Postman Android app on this device is outdated.
+            </div>
+            <div style={{ fontSize: '12px', color: colors.textDim, marginBottom: '20px', fontFamily: "'Consolas', monospace" }}>
+              Installed: {upgradeInfo?.installedVersion || 'unknown'} → Required: {upgradeInfo?.expectedVersion || 'unknown'}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                style={{
+                  ...button,
+                  background: colors.surfaceLight,
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.border}`,
+                  fontSize: '13px',
+                  padding: '8px 24px',
+                }}
+                onClick={dismissUpgrade}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  ...button,
+                  background: colors.accent,
+                  color: colors.white,
+                  fontSize: '13px',
+                  padding: '8px 24px',
+                }}
+                onClick={installAndConnect}
+              >
+                Update & Connect
               </button>
             </div>
           </div>

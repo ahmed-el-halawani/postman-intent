@@ -81,6 +81,8 @@ export default function QuickActions() {
             key: e.key,
             type: e.type as any,
             value: e.value,
+            enabled: true,
+            subExtras: [],
           }))
         : [],
     };

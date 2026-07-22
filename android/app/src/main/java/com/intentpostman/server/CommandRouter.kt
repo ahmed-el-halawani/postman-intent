@@ -84,13 +84,20 @@ class CommandRouter(
     }
 
     private fun handlePing(): JsonElement {
+        val pkgInfo = try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (e: Exception) { null }
         return JsonObject().apply {
             addProperty("status", "pong")
-            addProperty("version", "1.0.0")
+            addProperty("version", pkgInfo?.versionName ?: "unknown")
+            pkgInfo?.let { addProperty("versionCode", it.longVersionCode) }
         }
     }
 
     private fun handleInfo(): JsonElement {
+        val pkgInfo = try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (e: Exception) { null }
         return JsonObject().apply {
             addProperty("model", Build.MODEL)
             addProperty("manufacturer", Build.MANUFACTURER)
@@ -98,6 +105,8 @@ class CommandRouter(
             addProperty("apiLevel", Build.VERSION.SDK_INT)
             addProperty("device", Build.DEVICE)
             addProperty("product", Build.PRODUCT)
+            addProperty("appVersionName", pkgInfo?.versionName ?: "unknown")
+            pkgInfo?.let { addProperty("appVersionCode", it.longVersionCode) }
         }
     }
 }

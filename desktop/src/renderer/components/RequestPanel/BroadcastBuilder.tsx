@@ -57,9 +57,22 @@ export default function BroadcastBuilder({ section = 'params' }: BroadcastBuilde
     if (request.data) params.data = request.data;
     if (request.mimeType) params.mimeType = request.mimeType;
     if (request.extras.length > 0) {
-      params.extras = request.extras
-        .filter((e) => e.key)
-        .map((e) => ({ key: e.key, type: e.type, value: e.value }));
+      const serialized = request.extras
+        .filter((e) => e.enabled && e.key)
+        .map((e) => {
+          const o: Record<string, unknown> = { key: e.key, type: e.type, value: e.value };
+          if (e.type === 'bundle') {
+            o.subExtras = (e.subExtras || [])
+              .filter((s) => s.enabled && s.key)
+              .map((s) => {
+                const so: Record<string, unknown> = { key: s.key, type: s.type, value: s.value };
+                if (s.type === 'bundle') so.subExtras = s.subExtras?.filter((x) => x.enabled && x.key) || [];
+                return so;
+              });
+          }
+          return o;
+        });
+      if (serialized.length > 0) params.extras = serialized;
     }
 
     const start = performance.now();

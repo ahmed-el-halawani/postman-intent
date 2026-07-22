@@ -37,6 +37,34 @@ jobs:
           fi
           echo "Next release: ${{ steps.version.outputs.tag }}"
 
+      # ── Patch version into source files ─────────────────────
+      - name: Patch version into build files
+        id: patch-version
+        shell: bash
+        run: |
+          VERSION_NUMBER="${{ steps.version.outputs.tag }}"
+          # Strip 'v' prefix for the numeric version
+          VERSION_NUMERIC="${VERSION_NUMBER#v}"
+
+          echo "Patching version to $VERSION_NUMERIC"
+
+          # Patch android/app/build.gradle.kts — versionName and versionCode
+          # versionCode = major*10000 + minor*100 + patch (e.g. 1.2.3 → 10203)
+          MAJOR=$(echo "$VERSION_NUMERIC" | cut -d. -f1)
+          MINOR=$(echo "$VERSION_NUMERIC" | cut -d. -f2)
+          PATCH=$(echo "$VERSION_NUMERIC" | cut -d. -f3)
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+
+          sed -i "s/versionCode = .*/versionCode = $VERSION_CODE/" android/app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"$VERSION_NUMERIC\"/" android/app/build.gradle.kts
+
+          echo "Android build.gradle.kts patched: versionName=$VERSION_NUMERIC versionCode=$VERSION_CODE"
+
+          # Patch desktop/package.json — version field
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_NUMERIC\"/" desktop/package.json
+
+          echo "Desktop package.json patched: version=$VERSION_NUMERIC"
+
       # ── Build Android APK ─────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
