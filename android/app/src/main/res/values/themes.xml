@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Relay activities never draw anything: no setContentView, no views.
+         windowDisablePreview skips the starting window the system would otherwise
+         allocate and draw before the activity exists, and @null animations remove
+         the open/close transitions nothing is visible during. -->
+    <style name="RelayTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+
+</resources>

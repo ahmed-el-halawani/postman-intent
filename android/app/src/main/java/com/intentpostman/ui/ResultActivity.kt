@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,13 +62,16 @@ class ResultActivity : ComponentActivity() {
         Log.e(TAG, "onCreate: ResultActivity")
 
 
-        // Make this activity click-through so touches pass to the target activity below
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        )
+        // Click-through so touches pass to the target activity below, and 1x1 so the
+        // relay never asks the compositor for a full-screen surface it draws nothing into.
+        window.attributes = window.attributes.apply {
+            width = 1
+            height = 1
+            gravity = Gravity.TOP or Gravity.START
+            flags = flags or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
 
         Log.e(TAG, "onCreate: ")
 
