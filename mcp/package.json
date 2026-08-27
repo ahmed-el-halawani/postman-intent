@@ -1,0 +1,28 @@
+{
+  "name": "intent-postman-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for testing Android intents, broadcasts, services and packages through the Intent Postman relay app",
+  "license": "ISC",
+  "bin": {
+    "intent-postman-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0"
+  }
+}

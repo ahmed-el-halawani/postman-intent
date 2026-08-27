@@ -5,6 +5,7 @@ import { useBroadcastStore } from './store/broadcastStore';
 import { useServiceStore } from './store/serviceStore';
 import { useTabStore } from './store/tabStore';
 import { useCollectionsStore } from './store/collectionsStore';
+import { useLayoutStore } from './store/layoutStore';
 import { useColors } from './styles';
 import DeviceBar from './components/DeviceBar/DeviceBar';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -19,6 +20,9 @@ export default function App() {
   const addNotification = useNotificationStore((s) => s.addNotification);
   const showSaveDialog = useTabStore((s) => s.showSaveDialog);
   const showUnsavedDialog = useTabStore((s) => s.showUnsavedDialog);
+  const panelOrientation = useLayoutStore((s) => s.panelOrientation);
+  const toggleOrientation = useLayoutStore((s) => s.toggle);
+  const isHorizontal = panelOrientation === 'horizontal';
   const colors = useColors();
 
   // Resize state for request/response horizontal split
@@ -37,8 +41,13 @@ export default function App() {
       const mainArea = document.getElementById('main-content-area');
       if (!mainArea) return;
       const rect = mainArea.getBoundingClientRect();
-      const ratio = (e.clientX - rect.left) / rect.width;
-      setRequestPanelRatio(Math.max(0.25, Math.min(0.75, ratio)));
+      if (isHorizontal) {
+        const ratio = (e.clientY - rect.top) / rect.height;
+        setRequestPanelRatio(Math.max(0.25, Math.min(0.75, ratio)));
+      } else {
+        const ratio = (e.clientX - rect.left) / rect.width;
+        setRequestPanelRatio(Math.max(0.25, Math.min(0.75, ratio)));
+      }
     };
 
     const handleMouseUp = () => setIsResizing(false);
@@ -49,7 +58,7 @@ export default function App() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, isHorizontal]);
 
   useEffect(() => {
     refreshDevices();
@@ -149,12 +158,12 @@ export default function App() {
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <TabBar />
 
-          {/* Horizontal split: Request (left) / Response (right) */}
+          {/* Split: Request / Response — orientation-aware */}
           <div
             id="main-content-area"
             style={{
               display: 'flex',
-              flexDirection: 'row',
+              flexDirection: isHorizontal ? 'column' : 'row',
               flex: 1,
               overflow: 'hidden',
             }}
@@ -162,7 +171,9 @@ export default function App() {
             {/* Request Panel */}
             <div
               style={{
-                width: `${requestPanelRatio * 100}%`,
+                ...(isHorizontal
+                  ? { height: `${requestPanelRatio * 100}%` }
+                  : { width: `${requestPanelRatio * 100}%` }),
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
@@ -175,12 +186,11 @@ export default function App() {
             <div
               onMouseDown={handleResizeMouseDown}
               style={{
-                width: '4px',
-                minWidth: '4px',
+                ...(isHorizontal
+                  ? { height: '4px', minHeight: '4px', cursor: 'row-resize', borderTop: `1px solid ${colors.border}` }
+                  : { width: '4px', minWidth: '4px', cursor: 'col-resize', borderLeft: `1px solid ${colors.border}` }),
                 background: colors.borderLight,
-                cursor: 'col-resize',
                 flexShrink: 0,
-                borderLeft: `1px solid ${colors.border}`,
                 transition: isResizing ? 'none' : 'background 0.15s',
               }}
               onMouseEnter={(e) => {
@@ -194,7 +204,7 @@ export default function App() {
             />
 
             {/* Response Panel */}
-            <div style={{ flex: 1, overflow: 'hidden', minWidth: '200px' }}>
+            <div style={{ flex: 1, overflow: 'hidden', ...(isHorizontal ? { minHeight: '100px' } : { minWidth: '200px' }) }}>
               <ResponsePanel />
             </div>
           </div>
@@ -203,6 +213,7 @@ export default function App() {
         {/* Right Action Sidebar */}
         <div
           style={{
+            position: 'relative',
             width: '48px',
             minWidth: '48px',
             background: colors.surfaceLight,
@@ -255,6 +266,41 @@ export default function App() {
             title="Comments"
           >
             &#128172;
+          </button>
+
+          {/* Layout toggle */}
+          <button
+            onClick={toggleOrientation}
+            style={{
+              position: 'absolute',
+              bottom: '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              color: colors.textMuted,
+            }}
+            title={isHorizontal ? 'Switch to side-by-side' : 'Switch to stacked'}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = colors.accentOrange;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = colors.textMuted;
+            }}
+          >
+            {isHorizontal ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="3" width="8" height="14" rx="1" />
+                <rect x="11" y="3" width="8" height="14" rx="1" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="1" width="14" height="8" rx="1" />
+                <rect x="3" y="11" width="14" height="8" rx="1" />
+              </svg>
+            )}
           </button>
         </div>
       </div>
