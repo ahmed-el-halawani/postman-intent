@@ -7,7 +7,7 @@ plugins {
 android {
     signingConfigs {
         getByName("debug") {
-            storeFile = file("C:\\Users\\tmcgu\\Desktop\\ai projects\\problem solving\\postman\\postman-intent\\debug")
+            storeFile = file("debug")
             storePassword = "Ahmed123"
             keyPassword = "Ahmed123"
             keyAlias = "key0"
