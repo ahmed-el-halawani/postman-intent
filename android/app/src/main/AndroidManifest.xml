@@ -30,9 +30,7 @@
             android:name=".ui.ResultActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|uiMode|locale|layoutDirection"
             android:windowSoftInputMode="adjustResize|stateHidden"
-            android:excludeFromRecents="true"
             android:exported="true"
-            android:taskAffinity=""
             android:theme="@style/RelayTheme"
             />
 

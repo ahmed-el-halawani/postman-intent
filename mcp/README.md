@@ -23,6 +23,19 @@ On first use it downloads the latest `app-debug.apk` from the
 installs it on the device, pre-grants permissions, starts the relay service
 headlessly (no UI taps needed) and verifies connectivity with a ping.
 
+## Two connection modes
+
+- **adb (USB)** — full control: APK install, permissions, service start, port forward.
+  The setup output reports the device's Wi-Fi IP for adb-free reuse.
+- **Direct TCP (no adb)** — pass `host` (+ optional `port`, default 5000) to any tool
+  to connect straight to the relay over the network. Works because the relay's
+  `ServerSocket` binds all interfaces. APK install/upgrade still requires an adb run.
+
+```
+setup_device { "host": "192.168.0.187" }   // direct, no adb
+send_intent  { "host": "192.168.0.187", "type": "activity", "component": "..." }
+```
+
 ## Prerequisites
 
 - **Node.js 18+**

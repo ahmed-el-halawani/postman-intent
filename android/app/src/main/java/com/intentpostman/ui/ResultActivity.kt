@@ -1,5 +1,6 @@
 package com.intentpostman.ui
 
+import android.app.ComponentCaller
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
@@ -10,7 +11,6 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.gson.Gson
-import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.intentpostman.server.JsonRpcException
@@ -69,8 +69,9 @@ class ResultActivity : ComponentActivity() {
             height = 1
             gravity = Gravity.TOP or Gravity.START
             flags = flags or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN
         }
 
         Log.e(TAG, "onCreate: ")
@@ -93,6 +94,18 @@ class ResultActivity : ComponentActivity() {
         }
     }
 
+
+    override fun onNewIntent(intent: Intent, caller: ComponentCaller) {
+        super.onNewIntent(intent, caller)
+        Log.e(TAG, "onNewIntent: caller: " + caller.uid)
+
+    }
+
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        Log.e(TAG, "onNewIntent: ")
+    }
 
     private fun deliverResult(resultCode: Int, data: Intent?) {
         onResultCallback?.invoke(requestId, REQUEST_CODE, resultCode, data)
@@ -212,6 +225,7 @@ class ResultActivity : ComponentActivity() {
                         bundle.putStringArray(key, value.asString.split(",").map { it.trim() }.toTypedArray())
                     }
                 }
+
                 "int_array" -> {
                     if (value.isJsonArray) {
                         bundle.putIntArray(key, value.asJsonArray.map { it.asInt }.toIntArray())
@@ -219,6 +233,7 @@ class ResultActivity : ComponentActivity() {
                         bundle.putIntArray(key, value.asString.split(",").map { it.trim().toInt() }.toIntArray())
                     }
                 }
+
                 "bundle" -> {
                     val subBundle = Bundle()
                     extraObj?.getAsJsonArray("subExtras")?.forEach { subEl ->

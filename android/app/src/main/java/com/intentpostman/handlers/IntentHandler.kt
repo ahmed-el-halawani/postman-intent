@@ -145,7 +145,7 @@ class IntentHandler(
             putExtra(ResultActivity.EXTRA_DATA, params.get("data")?.asString ?: "")
             putExtra(ResultActivity.EXTRA_MIME_TYPE, params.get("mimeType")?.asString ?: "")
             try {
-                val x =  params.toString()
+                val x = params.toString()
 
                 putExtra(ResultActivity.EXTRA_INTENT_EXTRAS_JSON, x ?: "")
             } catch (e: Exception) {
@@ -322,6 +322,7 @@ class IntentHandler(
                         bundle.putStringArray(key, value.asString.split(",").map { it.trim() }.toTypedArray())
                     }
                 }
+
                 "int_array" -> {
                     if (value.isJsonArray) {
                         bundle.putIntArray(key, value.asJsonArray.map { it.asInt }.toIntArray())
@@ -329,6 +330,7 @@ class IntentHandler(
                         bundle.putIntArray(key, value.asString.split(",").map { it.trim().toInt() }.toIntArray())
                     }
                 }
+
                 "bundle" -> {
                     val subBundle = Bundle()
                     extraObj?.getAsJsonArray("subExtras")?.forEach { subEl ->

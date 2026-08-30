@@ -3,12 +3,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { pickDevice, setupDevice, rpcCall } from './relay';
+import { pickDevice, setupDevice, rpcCall, resolveTarget, finalizeTarget, type Target } from './relay';
 import { listDevices } from './adb';
 import { drainBroadcastEvents, drainServiceEvents, waitForIntentResult } from './events';
 
-const serialParam = {
-  serial: z.string().optional().describe('Device serial. Omit when exactly one device is connected.'),
+const targetParam = {
+  serial: z.string().optional().describe('Device serial (adb path). Omit when exactly one device is connected.'),
+  host: z.string().optional().describe('Direct connection: relay device IP/hostname — connects over the network without adb.'),
+  port: z.number().optional().describe('Relay port for direct host connections. Default 5000.'),
 };
 
 const extraValue = z.union([z.string(), z.number(), z.boolean()]);
@@ -31,6 +33,11 @@ function clean(params: Record<string, unknown>): Record<string, unknown> {
     out[k] = v;
   }
   return out;
+}
+
+/** Resolve the tool's serial/host args into a concrete connection target. */
+async function target(opts: { serial?: string; host?: string; port?: number }): Promise<Target> {
+  return finalizeTarget(resolveTarget(opts));
 }
 
 const server = new McpServer(
@@ -57,12 +64,12 @@ server.registerTool(
   'setup_device',
   {
     description:
-      'One-stop setup for an Android device: installs/updates the Intent Postman relay APK from GitHub releases, grants permissions, starts the relay service headlessly, forwards a TCP port and verifies connectivity. Must succeed before any other tool works.',
-    inputSchema: serialParam,
+      'One-stop setup for an Android device. With adb (serial or single USB device): installs/updates the Intent Postman relay APK from GitHub releases, grants permissions, starts the relay service headlessly, forwards a TCP port, verifies connectivity and reports the device Wi-Fi IP for adb-free reuse. With host (+optional port): verifies the direct network connection to the relay without adb.',
+    inputSchema: targetParam,
   },
-  async ({ serial }) => {
+  async ({ serial, host, port }) => {
     try {
-      return ok(await setupDevice(serial));
+      return ok(await setupDevice({ serial, host, port }));
     } catch (err) {
       return fail(err);
     }
@@ -73,15 +80,15 @@ server.registerTool(
   'device_info',
   {
     description: 'Ping the relay and get device info (Android version, SDK, model).',
-    inputSchema: serialParam,
+    inputSchema: targetParam,
   },
-  async ({ serial }) => {
+  async ({ serial, host, port }) => {
     try {
-      const s = (await pickDevice(serial)).serial;
-      const ping = await rpcCall(s, 'system.ping');
+      const t = await target({ serial, host, port });
+      const ping = await rpcCall(t, 'system.ping');
       let info: unknown = null;
       try {
-        info = await rpcCall(s, 'system.info');
+        info = await rpcCall(t, 'system.info');
       } catch {
         // optional
       }
@@ -98,7 +105,7 @@ server.registerTool(
     description:
       'Send an Android intent: launch an activity, deliver a broadcast, or start a service. Supports action, component, data URI, mime type, categories, flags and typed extras.',
     inputSchema: {
-      ...serialParam,
+      ...targetParam,
       type: z.enum(['activity', 'broadcast', 'service']).describe('Intent kind.'),
       action: z.string().optional().describe('Intent action, e.g. android.intent.action.VIEW.'),
       component: z.string().optional().describe('Target component as package/class, e.g. com.example/.MainActivity.'),
@@ -122,10 +129,10 @@ server.registerTool(
       waitForResultMs: z.number().optional().describe('When forResult=true, block up to this long for the result notification. Default 10000.'),
     },
   },
-  async ({ serial, waitForResultMs, ...params }) => {
+  async ({ serial, host, port, waitForResultMs, ...params }) => {
     try {
-      const s = (await pickDevice(serial)).serial;
-      const result = await rpcCall(s, 'intent.send', clean(params));
+      const t = await target({ serial, host, port });
+      const result = await rpcCall(t, 'intent.send', clean(params));
       const requestId =
         result && typeof result === 'object' && 'requestId' in result
           ? (result as Record<string, unknown>).requestId
@@ -146,18 +153,18 @@ server.registerTool(
   {
     description: 'Send a broadcast intent by action, optionally targeting a package, with string extras.',
     inputSchema: {
-      ...serialParam,
+      ...targetParam,
       action: z.string().describe('Broadcast action, e.g. com.example.MY_ACTION.'),
       packageName: z.string().optional().describe('Restrict delivery to this package.'),
       extras: z.array(z.object({ key: z.string(), value: extraValue })).optional(),
     },
   },
-  async ({ serial, packageName, ...params }) => {
+  async ({ serial, host, port, packageName, ...params }) => {
     try {
-      const s = (await pickDevice(serial)).serial;
+      const t = await target({ serial, host, port });
       const p = clean(params);
       if (packageName) p.package = packageName;
-      return ok(await rpcCall(s, 'broadcast.send', p));
+      return ok(await rpcCall(t, 'broadcast.send', p));
     } catch (err) {
       return fail(err);
     }
@@ -170,25 +177,25 @@ server.registerTool(
     description:
       'Manage broadcast listeners: register (listen), unregister (unlisten/unlistenAll), or list active listeners. Captured broadcasts are retrieved via broadcast_events.',
     inputSchema: {
-      ...serialParam,
+      ...targetParam,
       op: z.enum(['listen', 'unlisten', 'unlistenAll', 'list']).describe('Listener operation.'),
       filterAction: z.string().optional().describe('For listen: broadcast action to capture.'),
       listenerId: z.string().optional().describe('For listen/unlisten: stable id for the listener.'),
     },
   },
-  async ({ serial, op, filterAction, listenerId }) => {
+  async ({ serial, host, port, op, filterAction, listenerId }) => {
     try {
-      const s = (await pickDevice(serial)).serial;
+      const t = await target({ serial, host, port });
       switch (op) {
         case 'listen':
-          return ok(await rpcCall(s, 'broadcast.listen', clean({ action: filterAction, listenerId })));
+          return ok(await rpcCall(t, 'broadcast.listen', clean({ action: filterAction, listenerId })));
         case 'unlisten':
           if (!listenerId) throw new Error('listenerId is required for unlisten');
-          return ok(await rpcCall(s, 'broadcast.unlisten', { listenerId }));
+          return ok(await rpcCall(t, 'broadcast.unlisten', { listenerId }));
         case 'unlistenAll':
-          return ok(await rpcCall(s, 'broadcast.unlistenAll'));
+          return ok(await rpcCall(t, 'broadcast.unlistenAll'));
         case 'list':
-          return ok(await rpcCall(s, 'broadcast.listListeners'));
+          return ok(await rpcCall(t, 'broadcast.listListeners'));
       }
     } catch (err) {
       return fail(err);
@@ -201,11 +208,11 @@ server.registerTool(
   {
     description:
       'Drain captured events since the last call: broadcast events from registered listeners plus service connect/disconnect lifecycle events.',
-    inputSchema: serialParam,
+    inputSchema: targetParam,
   },
-  async ({ serial }) => {
+  async ({ serial, host, port }) => {
     try {
-      if (serial) await pickDevice(serial); // validate serial when given
+      if (serial || host) await target({ serial, host, port }); // validate when given
       return ok({ broadcastEvents: drainBroadcastEvents(), serviceEvents: drainServiceEvents() });
     } catch (err) {
       return fail(err);
@@ -218,7 +225,7 @@ server.registerTool(
   {
     description: 'Manage Android services: start, stop, bind/unbind, call binder methods, send messages, list bindings.',
     inputSchema: {
-      ...serialParam,
+      ...targetParam,
       op: z
         .enum(['start', 'stop', 'bind', 'unbind', 'call', 'sendMessage', 'listBindings'])
         .describe('Service operation.'),
@@ -234,9 +241,9 @@ server.registerTool(
       data: z.string().optional().describe('For sendMessage: message data.'),
     },
   },
-  async ({ serial, op, intentAction, packageName, ...rest }) => {
+  async ({ serial, host, port, op, intentAction, packageName, ...rest }) => {
     try {
-      const s = (await pickDevice(serial)).serial;
+      const t = await target({ serial, host, port });
       const methodMap: Record<string, string> = {
         start: 'service.start',
         stop: 'service.stop',
@@ -249,7 +256,7 @@ server.registerTool(
       const base: Record<string, unknown> = { ...rest };
       if (intentAction) base.action = intentAction;
       if (packageName) base.package = packageName;
-      return ok(await rpcCall(s, methodMap[op], clean(base)));
+      return ok(await rpcCall(t, methodMap[op], clean(base)));
     } catch (err) {
       return fail(err);
     }
@@ -262,17 +269,17 @@ server.registerTool(
     description:
       'Query installed packages and their components: listPackages, queryComponents, getQuickActions, queryIntents.',
     inputSchema: {
-      ...serialParam,
+      ...targetParam,
       op: z.enum(['listPackages', 'queryComponents', 'getQuickActions', 'queryIntents']).describe('Query kind.'),
       packageName: z.string().optional().describe('Target package (required by most queries).'),
       params: z.record(z.unknown()).optional().describe('Additional raw params passed through to the relay.'),
     },
   },
-  async ({ serial, op, packageName, params }) => {
+  async ({ serial, host, port, op, packageName, params }) => {
     try {
-      const s = (await pickDevice(serial)).serial;
+      const t = await target({ serial, host, port });
       const merged = clean({ packageName, ...(params ?? {}) });
-      return ok(await rpcCall(s, `package.${op}`, merged));
+      return ok(await rpcCall(t, `package.${op}`, merged));
     } catch (err) {
       return fail(err);
     }
