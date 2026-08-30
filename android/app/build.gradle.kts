@@ -5,6 +5,14 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("C:\\Users\\tmcgu\\Desktop\\ai projects\\problem solving\\postman\\postman-intent\\debug")
+            storePassword = "Ahmed123"
+            keyPassword = "Ahmed123"
+            keyAlias = "key0"
+        }
+    }
     namespace = "com.intentpostman"
     compileSdk = 35
 
@@ -17,6 +25,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            this.signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
